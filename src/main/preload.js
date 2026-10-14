@@ -1,0 +1,140 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+// Every capability the renderer can reach is listed here, explicitly.
+// contextIsolation + no nodeIntegration (see main.js) means this is the
+// entire trusted surface — nothing else is reachable from the web content.
+contextBridge.exposeInMainWorld('localAI', {
+  // -- chats --------------------------------------------------------
+  createChat: () => ipcRenderer.invoke('chat:create'),
+  listChats: () => ipcRenderer.invoke('chat:list'),
+  getHistory: (chatId) => ipcRenderer.invoke('chat:history', chatId),
+  renameChat: (chatId, title) => ipcRenderer.invoke('chat:rename', { chatId, title }),
+  deleteChat: (chatId) => ipcRenderer.invoke('chat:delete', chatId),
+  clearAllChats: () => ipcRenderer.invoke('chat:clear-all'),
+  generateChatTitle: (model, chatId, text) => ipcRenderer.invoke('chat:generate-title', { model, chatId, text }),
+  sendMessage: (payload) => ipcRenderer.invoke('chat:send', payload),
+  utilityStream: (payload) => ipcRenderer.invoke('utility:stream', payload),
+  saveAssistantMessage: (chatId, content) => ipcRenderer.invoke('chat:save-assistant-message', { chatId, content }),
+  abortGeneration: () => ipcRenderer.invoke('chat:abort'),
+  exportChat: (chatId, title) => ipcRenderer.invoke('chat:export', { chatId, title }),
+  onChatToken: (cb) => on('chat-token', cb),
+
+  // -- models ---------------------------------------------------------
+  listModels: () => ipcRenderer.invoke('ollama:list-models'),
+  getCurrentModel: () => ipcRenderer.invoke('ollama:current-model'),
+  setCurrentModel: (name) => ipcRenderer.invoke('ollama:set-model', name),
+  getOllamaStatus: () => ipcRenderer.invoke('ollama:status'),
+  onOllamaStatus: (cb) => on('ollama-status', cb),
+  getRunningModels: () => ipcRenderer.invoke('ollama:running-models'),
+  getModelCapabilities: (name) => ipcRenderer.invoke('ollama:model-capabilities', name),
+
+  // -- model storage location (portable folder vs. a host-machine folder) --
+  getModelsLocation: () => ipcRenderer.invoke('models:get-location'),
+  chooseModelsFolder: () => ipcRenderer.invoke('models:choose-folder'),
+  useDefaultModelsFolder: () => ipcRenderer.invoke('models:use-portable'),
+  syncModels: (direction) => ipcRenderer.invoke('models:sync', direction),
+  onModelSyncProgress: (cb) => on('model-sync-progress', cb),
+  onOllamaRestartStatus: (cb) => on('ollama-restart-status', cb),
+
+  // -- model catalog / downloads ---------------------------------------
+  getCatalog: () => ipcRenderer.invoke('catalog:list'),
+  getCatalogAllTiers: () => ipcRenderer.invoke('catalog:list-all-tiers'),
+  getDownloadStatus: () => ipcRenderer.invoke('catalog:status'),
+  pullModel: (name) => ipcRenderer.invoke('catalog:pull', name),
+  pullMissingModels: () => ipcRenderer.invoke('catalog:pull-missing'),
+  cancelDownload: (name) => ipcRenderer.invoke('catalog:cancel', name),
+  getCatalogFileInfo: () => ipcRenderer.invoke('catalog:file-info'),
+  revealCatalogFile: (tier) => ipcRenderer.invoke('catalog:reveal-file', tier),
+  deleteModel: (name) => ipcRenderer.invoke('catalog:delete', name),
+  onPullProgress: (cb) => on('pull-progress', cb),
+  onPullComplete: (cb) => on('pull-complete', cb),
+  onPullError: (cb) => on('pull-error', cb),
+
+  // -- catalog GPU-size tiers --------------------------------------------
+  getCatalogTiers: () => ipcRenderer.invoke('catalog:tiers'),
+  getSelectedCatalogTiers: () => ipcRenderer.invoke('catalog:get-selected-tiers'),
+  setSelectedCatalogTiers: (tiers) => ipcRenderer.invoke('catalog:set-selected-tiers', tiers),
+
+  // -- context length (num_ctx) ------------------------------------------
+  getContextSizePresets: () => ipcRenderer.invoke('settings:context-size-presets'),
+  getContextSize: () => ipcRenderer.invoke('settings:get-context-size'),
+  setContextSize: (size) => ipcRenderer.invoke('settings:set-context-size', size),
+
+  // -- mobile sync server -----------------------------------------------
+  mobileStart: () => ipcRenderer.invoke('mobile:start'),
+  mobileStop: () => ipcRenderer.invoke('mobile:stop'),
+  mobileStatus: () => ipcRenderer.invoke('mobile:status'),
+
+  // -- voice input ------------------------------------------------------
+  voiceCheck: () => ipcRenderer.invoke('voice:check'),
+  voiceTranscribe: (base64Audio) => ipcRenderer.invoke('voice:transcribe', base64Audio),
+
+  // -- library (local document search) -----------------------------------
+  libraryUpload: (payload) => ipcRenderer.invoke('library:upload', payload),
+  libraryListUploads: () => ipcRenderer.invoke('library:list-uploads'),
+  libraryDeleteUpload: (id) => ipcRenderer.invoke('library:delete-upload', id),
+  libraryReadUpload: (id) => ipcRenderer.invoke('library:read-upload', id),
+  librarySearch: (query, embedModel) => ipcRenderer.invoke('library:search', { query, embedModel }),
+  libraryContext: (query, embedModel) => ipcRenderer.invoke('library:context', { query, embedModel }),
+  libraryIdentifyImage: (model, imageBase64, options) => ipcRenderer.invoke('library:identify-image', { model, imageBase64, options }),
+  libraryBrowse: (payload) => ipcRenderer.invoke('library:browse', payload),
+  libraryBrowseFacets: () => ipcRenderer.invoke('library:browse-facets'),
+  libraryGetDoc: (id) => ipcRenderer.invoke('library:get-doc', id),
+  libraryOpenPdf: (id) => ipcRenderer.invoke('library:open-pdf', id),
+
+  // -- offline maps (local .pmtiles files) ---------------------------------
+  mapsList: () => ipcRenderer.invoke('maps:list'),
+  mapsImport: () => ipcRenderer.invoke('maps:import'),
+  mapsRemove: (name) => ipcRenderer.invoke('maps:remove', name),
+  mapsGetDefault: () => ipcRenderer.invoke('maps:get-default'),
+  mapsSetDefault: (name) => ipcRenderer.invoke('maps:set-default', name),
+  mapsBuildIndex: (name) => ipcRenderer.invoke('maps:build-index', name),
+  mapsGetPins: () => ipcRenderer.invoke('maps:get-pins'),
+  mapsAddPin: (pin) => ipcRenderer.invoke('maps:add-pin', pin),
+  mapsDeletePin: (id) => ipcRenderer.invoke('maps:delete-pin', id),
+  mapsRenamePin: (id, name) => ipcRenderer.invoke('maps:rename-pin', { id, name }),
+  mapsGetDefaultPin: () => ipcRenderer.invoke('maps:get-default-pin'),
+  mapsSetDefaultPin: (id) => ipcRenderer.invoke('maps:set-default-pin', id),
+
+  // -- offline Wikipedia (local .zim file via bundled kiwix-serve) ---------
+  wikipediaStatus: (opts) => ipcRenderer.invoke('wikipedia:status', opts),
+  wikipediaUnload: () => ipcRenderer.invoke('wikipedia:unload'),
+  wikipediaImportZim: () => ipcRenderer.invoke('wikipedia:import-zim'),
+  wikipediaShowView: (payload) => ipcRenderer.invoke('wikipedia:show-view', payload),
+  wikipediaHideView: () => ipcRenderer.invoke('wikipedia:hide-view'),
+  wikipediaGetLocation: () => ipcRenderer.invoke('wikipedia:get-location'),
+  wikipediaChooseFolder: () => ipcRenderer.invoke('wikipedia:choose-folder'),
+  wikipediaUsePortable: () => ipcRenderer.invoke('wikipedia:use-portable'),
+  wikipediaGetCatalog: () => ipcRenderer.invoke('wikipedia:get-catalog'),
+  wikipediaList: () => ipcRenderer.invoke('wikipedia:list'),
+  wikipediaGetDownloadStatus: () => ipcRenderer.invoke('wikipedia:get-download-status'),
+  wikipediaDownload: (id) => ipcRenderer.invoke('wikipedia:download', id),
+  wikipediaCancelDownload: (id) => ipcRenderer.invoke('wikipedia:cancel-download', id),
+  wikipediaPauseDownload: (id) => ipcRenderer.invoke('wikipedia:pause-download', id),
+  wikipediaResumeDownload: (id) => ipcRenderer.invoke('wikipedia:resume-download', id),
+  wikipediaSetActive: (name) => ipcRenderer.invoke('wikipedia:set-active', name),
+  wikipediaRemove: (name) => ipcRenderer.invoke('wikipedia:remove', name),
+  onWikipediaPullProgress: (cb) => on('wikipedia-pull-progress', cb),
+  onWikipediaPullComplete: (cb) => on('wikipedia-pull-complete', cb),
+  onWikipediaPullError: (cb) => on('wikipedia-pull-error', cb),
+
+  // -- chat attachments -----------------------------------------------------
+  processAttachment: (payload) => ipcRenderer.invoke('attachment:process', payload),
+
+  // -- app lifecycle --------------------------------------------------------
+  quitApp: (keepLoaded) => ipcRenderer.invoke('app:quit', { keepLoaded }),
+  getKeepModelsLoadedPref: () => ipcRenderer.invoke('app:get-keep-loaded-pref'),
+  onShutdownStatus: (cb) => on('shutdown-status', cb),
+  onCloseRequested: (cb) => on('close-requested', cb),
+
+  // -- misc ---------------------------------------------------------------
+  clipboardWrite: (text) => ipcRenderer.invoke('clipboard:write', text),
+  getSystemInfo: () => ipcRenderer.invoke('system:info'),
+  getOllamaLog: () => ipcRenderer.invoke('ollama:get-log'),
+});
+
+function on(channel, cb) {
+  const listener = (_event, data) => cb(data);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}

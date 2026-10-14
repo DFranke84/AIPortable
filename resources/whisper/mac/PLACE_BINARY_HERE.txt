@@ -1,0 +1,9 @@
+Optional — only needed for the mic/voice-input feature.
+
+Place a whisper.cpp server build here:
+  resources/whisper/mac/whisper-server
+  resources/whisper/mac/model.bin   (e.g. a ggml-base.en.bin model, renamed)
+
+Get binaries/models from: https://github.com/ggml-org/whisper.cpp
+Without these, the mic button just reports "unavailable" — everything else
+in the app works fine.
