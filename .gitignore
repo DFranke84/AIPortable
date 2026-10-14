@@ -1,0 +1,23 @@
+# Dependencies (restore with npm install)
+node_modules/
+
+# User data: chats, library, models, maps, Wikipedia (~119 GB)
+data/
+
+# Bundled third-party binaries (see SETUP.md for how to obtain)
+resources/ollama/
+resources/kiwix/
+resources/maps/tools/*.exe
+resources/maps/tools/*.zip
+resources/whisper/**/*.exe
+resources/whisper/**/*.bin
+
+# Build output
+dist/
+out/
+
+# Scratch / misc
+t.html
+*.log
+Thumbs.db
+desktop.ini
