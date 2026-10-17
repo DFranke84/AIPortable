@@ -492,3 +492,7 @@ button, input, select, textarea { font-family: inherit; }
 .src-badge.zim { color: #6f9fd8; border-color: #6f9fd8; }
 .model-load-btn { padding: 2px 10px; font-size: 12px; }
 .model-load-btn.hidden { display: none; }
+.zim-summary { display: flex; align-items: center; gap: 8px; margin: 0 20px; padding: 6px 12px; border: 1px solid var(--border); border-bottom: none; border-radius: var(--radius) var(--radius) 0 0; background: var(--panel-raised); font-size: 12.5px; }
+.zim-summary.hidden { display: none; }
+.zim-summary-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zim-summary .pull-btn { padding: 2px 10px; font-size: 12px; }
