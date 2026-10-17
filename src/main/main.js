@@ -1631,6 +1631,14 @@ function saveZimFolderSettings(settings) {
 
 ipcMain.handle('zim:get-folders', () => zimFolderList());
 
+// Every .zim in any of the ZIM archive folders (switched off or not), so the
+// Wikipedia catalog can show "Have it" for archives kept elsewhere — e.g. the
+// Research library's _sources\zim — instead of offering to download them again.
+ipcMain.handle('zim:owned', () => {
+  const folders = zimFolderList().filter((f) => f.exists).map((f) => f.path);
+  return ZimSearch.scanFolders(folders).map((p) => ({ name: path.basename(p), folder: path.dirname(p) }));
+});
+
 ipcMain.handle('zim:add-folder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
     title: 'Choose a folder with .zim archives to search from chat',

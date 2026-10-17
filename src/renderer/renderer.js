@@ -175,6 +175,8 @@ const els = {
 
   mapSource: document.getElementById('map-source'),
   mapSetDefault: document.getElementById('map-set-default'),
+  mapSourceRow: document.getElementById('map-source-row'),
+  mapViewSourceSlot: document.getElementById('map-view-source-slot'),
   mapImport: document.getElementById('map-import'),
   mapCanvas: document.getElementById('map-canvas'),
   mapStatus: document.getElementById('map-status'),
@@ -1530,11 +1532,16 @@ els.wikipediaImport.onclick = async () => {
 };
 
 async function refreshWikipediaCatalog() {
-  const [{ catalog, error }, downloaded, downloadStatus] = await Promise.all([
+  const [{ catalog, error }, downloaded, downloadStatus, owned] = await Promise.all([
     window.localAI.wikipediaGetCatalog(),
     window.localAI.wikipediaList(),
     window.localAI.wikipediaGetDownloadStatus(),
+    window.localAI.zimOwned(),
   ]);
+  // Archives already on this PC in any ZIM folder, matched by name with the
+  // date left out (catalog keys have none; real files usually do).
+  const zimStem = (n) => n.replace(/\.zim$/i, '').replace(/_\d{4}-\d{2}[a-z]?$/, '');
+  const ownedByStem = new Map(owned.map((o) => [zimStem(o.name), o]));
 
   els.wikipediaCatalogList.innerHTML = '';
   if (error) {
@@ -1569,6 +1576,8 @@ async function refreshWikipediaCatalog() {
 
     for (const [id, info] of groups.get(category)) {
       const isDownloaded = haveNames.has(id);
+      const have = !isDownloaded ? ownedByStem.get(zimStem(id)) : null;
+      const haveDate = have && /_(\d{4}-\d{2})[a-z]?\.zim$/i.exec(have.name)?.[1];
       const progress = downloadStatus[id];
       const isPaused = progress?.status === 'paused';
       const item = document.createElement('div');
@@ -1577,11 +1586,11 @@ async function refreshWikipediaCatalog() {
         <div class="row">
           <div>
             <div class="name">${info.name}</div>
-            <div class="meta">${info.size}${info.articleCount ? ` · ${info.articleCount.toLocaleString()} articles` : ''}</div>
+            <div class="meta">${info.size}${info.articleCount > 1 ? ` · ${info.articleCount.toLocaleString()} articles` : ''}${have ? ` · you have ${haveDate ? `the ${haveDate} version` : 'it'} in ${have.folder}` : ''}</div>
           </div>
           <div class="catalog-actions">
-            <button class="pull-btn ${isDownloaded ? 'installed' : ''}" data-id="${id}" ${progress && !isPaused ? 'disabled' : ''}>
-              ${isDownloaded ? 'Downloaded' : isPaused ? 'Resume' : progress ? `${progress.progress}%` : 'Download'}
+            <button class="pull-btn ${isDownloaded || have ? 'installed' : ''}" data-id="${id}" ${(progress && !isPaused) || have ? 'disabled' : ''}>
+              ${isDownloaded ? 'Downloaded' : have ? 'Have it' : isPaused ? 'Resume' : progress ? `${progress.progress}%` : 'Download'}
             </button>
             ${progress && !isPaused ? `<button class="icon-neutral-btn pause-btn" title="Pause download">⏸</button>` : ''}
             ${progress ? `<button class="icon-delete-btn cancel-btn" title="Cancel download">✕</button>` : ''}
@@ -1591,7 +1600,7 @@ async function refreshWikipediaCatalog() {
         ${progress ? '<div class="progress-bar"><div class="progress-fill" style="width:' + progress.progress + '%"></div></div>' : ''}
         ${progress ? `<div class="meta progress-detail">${isPaused ? 'Paused — ' : ''}${formatWikipediaProgressDetail(progress)}</div>` : ''}
       `;
-      if (!isDownloaded && !progress) {
+      if (!isDownloaded && !have && !progress) {
         item.querySelector('.pull-btn').onclick = async (e) => {
           e.target.disabled = true;
           e.target.textContent = '0%';
@@ -1746,12 +1755,16 @@ function showMainView(name) {
   // node whether it's sitting in the Tools panel's #map-panel-slot or this
   // main-window view's #map-view-slot — moving it (rather than tearing down
   // and recreating the map) keeps panning/zoom/measure/search state intact.
+  // The map picker (#map-source-row) travels too, into the Map view's title
+  // bar, so that view shows which map is loaded and can switch it.
   if (name === 'map' && !wasMap) {
     initMapsTab();
     els.mapViewSlot.appendChild(els.mapPanelBody);
+    els.mapViewSourceSlot.appendChild(els.mapSourceRow);
     requestAnimationFrame(() => mapInstance?.resize());
   } else if (wasMap && name !== 'map') {
     els.mapPanelSlot.appendChild(els.mapPanelBody);
+    els.mapImport.before(els.mapSourceRow);
   }
 }
 function isMainViewActive(name) {
@@ -3404,14 +3417,16 @@ window.localAI.onMapsDownloadComplete(async () => {
 window.localAI.onMapsDownloadError(() => refreshMapCatalog());
 
 async function populateMapSources() {
-  const files = await window.localAI.mapsList();
+  const [files, { catalog }] = await Promise.all([window.localAI.mapsList(), window.localAI.mapsGetCatalog()]);
+  const known = catalog?.regions || {};
   els.mapSource.innerHTML = '';
   for (const f of files) {
     const opt = document.createElement('option');
     opt.value = `maptiles://${encodeURIComponent(f.name)}`;
     opt.dataset.attribution = '';
     opt.dataset.name = f.name;
-    opt.textContent = `${f.name}${f.bundled ? ' (bundled, offline)' : ' (offline)'}`;
+    const region = known[f.name.replace(/\.pmtiles$/i, '')];
+    opt.textContent = region ? `${region.name} (${f.name})` : f.name;
     els.mapSource.appendChild(opt);
   }
 }

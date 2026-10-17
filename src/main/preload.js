@@ -141,6 +141,7 @@ contextBridge.exposeInMainWorld('localAI', {
   // -- ZIM search in chat (services/zimSearch.js) --
   zimListSearchable: () => ipcRenderer.invoke('zim:list-searchable'),
   zimGetFolders: () => ipcRenderer.invoke('zim:get-folders'),
+  zimOwned: () => ipcRenderer.invoke('zim:owned'),
   zimAddFolder: () => ipcRenderer.invoke('zim:add-folder'),
   zimRemoveFolder: (folderPath) => ipcRenderer.invoke('zim:remove-folder', folderPath),
   zimSetFolderEnabled: (payload) => ipcRenderer.invoke('zim:set-folder-enabled', payload),
