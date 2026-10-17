@@ -138,6 +138,7 @@ contextBridge.exposeInMainWorld('localAI', {
   zimSaveSettings: (payload) => ipcRenderer.invoke('zim:save-settings', payload),
   zimContext: (payload) => ipcRenderer.invoke('zim:context', payload),
   onZimStep: (cb) => on('zim-step', cb),
+  onModelReload: (cb) => on('model-reload', cb),
   onWikipediaPullProgress: (cb) => on('wikipedia-pull-progress', cb),
   onWikipediaPullComplete: (cb) => on('wikipedia-pull-complete', cb),
   onWikipediaPullError: (cb) => on('wikipedia-pull-error', cb),

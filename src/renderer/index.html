@@ -375,8 +375,12 @@
             while a larger card can afford to go bigger. "Auto" leaves this to Ollama, which
             sizes it from available VRAM and can be as small as 4K — often too little once
             an image, document, or long chat history is involved.
+            Messages using 📚, 🗃️, an image or a document always get at least 16K. A loaded
+            model is only reloaded when a message needs more room than it was loaded with —
+            the app shows "Reloading model for a larger context" when that happens.
           </p>
           <div id="context-size-list" class="tier-select-list"></div>
+          <p id="context-size-note" class="panel-hint"></p>
 
           <h4 class="panel-subhead">Catalog</h4>
           <p class="panel-hint">

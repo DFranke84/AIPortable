@@ -115,6 +115,7 @@ const els = {
   catalogList: document.getElementById('catalog-list'),
   catalogTiersList: document.getElementById('catalog-tiers-list'),
   contextSizeList: document.getElementById('context-size-list'),
+  contextSizeNote: document.getElementById('context-size-note'),
   backendList: document.getElementById('backend-list'),
   backendLmstudioOptions: document.getElementById('backend-lmstudio-options'),
   backendLmstudioStatus: document.getElementById('backend-lmstudio-status'),
@@ -706,6 +707,8 @@ els.composer.addEventListener('submit', async (e) => {
   assistantBody.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span><span class="pending-timer">${pendingLabel}…</span>`;
   const pendingTimerEl = assistantBody.querySelector('.pending-timer');
   let pendingStart = Date.now();
+  const phase = (label) => { pendingLabel = label; pendingStart = Date.now(); pendingTimerEl.textContent = `${label}…`; };
+  currentPendingPhase = phase;
   const pendingInterval = setInterval(() => {
     pendingTimerEl.textContent = `${pendingLabel}… ${Math.floor((Date.now() - pendingStart) / 1000)}s`;
   }, 1000);
@@ -723,7 +726,6 @@ els.composer.addEventListener('submit', async (e) => {
     // Same num_ctx as the reply below (ZIM text always triggers the 16K
     // bump), so the model isn't reloaded between research and answer.
     const zimOptions = { num_ctx: await fitResidentCtx(chatNumCtx()) };
-    const phase = (label) => { pendingLabel = label; pendingStart = Date.now(); pendingTimerEl.textContent = `${label}…`; };
     // Load the model as its own visible step — otherwise its load time hides
     // inside "Searching" (the keyword step is the model's first use). A
     // no-op when it's already loaded with this context size.
@@ -911,6 +913,7 @@ els.composer.addEventListener('submit', async (e) => {
     assistantBody.parentElement.appendChild(tag);
   }
 
+  currentPendingPhase = null;
   if (full) await window.localAI.saveAssistantMessage(state.chatId, full);
 
   unsubscribe();
@@ -1112,10 +1115,11 @@ function ipcErrorText(err) {
 // restart the timer or re-flash "Model loaded" every time it re-confirms a
 // mode that hasn't actually changed.
 let modelLoadUiMode = 'idle';
+let modelLoadUiLabel = 'Loading model';
 let modelLoadTimerInterval = null;
 let modelLoadTextClearTimeout = null;
 
-function setModelLoadState(mode) {
+function setModelLoadState(mode, label = 'Loading model') {
   els.modelLoadDot.classList.toggle('loaded', mode === 'loaded');
   els.modelLoadDot.classList.toggle('loading', mode === 'loading');
   els.modelLoadDot.title =
@@ -1124,8 +1128,9 @@ function setModelLoadState(mode) {
     : 'Not loaded in memory yet — first message will take longer';
 
   els.modelLoadBtn.classList.toggle('hidden', mode !== 'idle' || !state.model);
-  if (mode === modelLoadUiMode) return;
+  if (mode === modelLoadUiMode && (mode !== 'loading' || label === modelLoadUiLabel)) return;
   modelLoadUiMode = mode;
+  modelLoadUiLabel = label;
   clearInterval(modelLoadTimerInterval);
   modelLoadTimerInterval = null;
   clearTimeout(modelLoadTextClearTimeout);
@@ -1133,10 +1138,10 @@ function setModelLoadState(mode) {
 
   if (mode === 'loading') {
     const start = Date.now();
-    els.modelLoadText.textContent = 'Loading model… 0s';
+    els.modelLoadText.textContent = `${label}… 0s`;
     els.modelLoadText.classList.remove('hidden');
     modelLoadTimerInterval = setInterval(() => {
-      els.modelLoadText.textContent = `Loading model… ${Math.floor((Date.now() - start) / 1000)}s`;
+      els.modelLoadText.textContent = `${label}… ${Math.floor((Date.now() - start) / 1000)}s`;
     }, 1000);
   } else if (mode === 'loaded') {
     els.modelLoadText.textContent = 'Model loaded';
@@ -1186,6 +1191,21 @@ async function refreshModelLoadState() {
   setModelLoadState(r === 'loaded' ? 'loaded' : 'idle');
 }
 setInterval(refreshModelLoadState, 5000);
+
+// The reply bubble currently waiting for its first token, if any — lets the
+// reload notice below show up there as well as in the header.
+let currentPendingPhase = null;
+
+// Ollama is reloading the model because a request needs a bigger context
+// than it's loaded with (ZIM/library/image after plain chat on a smaller
+// size, or a bigger size picked in Tools → Models). Smaller or unspecified
+// sizes never reload — see fitOptions in ollama.js.
+const ctxLabel = (n) => (n >= 1024 ? `${Math.round(n / 1024)}K` : String(n));
+window.localAI.onModelReload(({ from, to }) => {
+  const text = `Reloading model for a larger context (${ctxLabel(from)} → ${ctxLabel(to)})`;
+  setModelLoadState('loading', text);
+  currentPendingPhase?.(text);
+});
 
 // The context size a chat request will use — with library or ZIM lookups
 // on it's always the 16K bump (see needsContextBump in the send handler),
@@ -1750,9 +1770,14 @@ async function refreshContextSizeControl() {
     btn.textContent = opt.label;
     btn.title = opt.value === null ? "Let Ollama size the context automatically" : `Use at least ${opt.value.toLocaleString()} tokens of context for every message`;
     btn.onclick = async () => {
-      state.contextSize = await window.localAI.setContextSize(opt.value);
+      const res = await window.localAI.setContextSize(opt.value);
+      state.contextSize = res.size;
       [...els.contextSizeList.children].forEach((c) => c.classList.remove('active'));
       btn.classList.add('active');
+      els.contextSizeNote.textContent = res.unloaded
+        ? `${res.unloaded} was unloaded so the new size takes effect — it loads again with your next message (or click Load model).`
+        : '';
+      refreshModelLoadState();
     };
     els.contextSizeList.appendChild(btn);
   }

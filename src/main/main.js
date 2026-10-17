@@ -835,6 +835,9 @@ app.whenReady().then(async () => {
   registerResearchProtocol();
 
   ollama = new OllamaManager();
+  // A request needing a bigger context than the model is loaded with makes
+  // Ollama reload it — tell the UI so the wait isn't a mystery (see fitOptions).
+  ollama.onReload = (info) => win?.webContents.send('model-reload', info);
   lmstudio = new LMStudioManager({ getAutoLoad: getLmstudioAutoLoad, getThinking: getLmstudioThinking });
   downloader = new ModelDownloader(ollama, dataDir);
   // The phone server only needs the current model + chatStream, routed to
@@ -1050,10 +1053,26 @@ ipcMain.handle('catalog:set-selected-tiers', (e, tiers) => {
 
 ipcMain.handle('settings:context-size-presets', () => CONTEXT_SIZE_PRESETS);
 ipcMain.handle('settings:get-context-size', () => getContextSize());
-ipcMain.handle('settings:set-context-size', (e, size) => {
+// A loaded Ollama model keeps the context it was loaded with until it needs
+// a bigger one (see fitOptions in ollama.js), so a new setting wouldn't take
+// effect for it. If the chat model is loaded at a different size, unload it:
+// the next message (or Load model) loads it at the new size.
+// LM Studio fixes context at load time too, but its models are managed in
+// LM Studio itself, so they're left alone.
+ipcMain.handle('settings:set-context-size', async (e, size) => {
   hostSettings.contextSize = CONTEXT_SIZE_PRESETS.includes(size) ? size : null;
   saveHostSettings();
-  return getContextSize();
+  const chosen = getContextSize();
+  let unloaded = null;
+  const model = ollama.getCurrentModel();
+  if (getLlmBackend() === 'ollama' && model) {
+    const resident = (await ollama.getRunningModels()).find((m) => m.name === model);
+    if (resident && resident.context_length !== chosen) {
+      await ollama.unloadModel(model);
+      unloaded = model;
+    }
+  }
+  return { size: chosen, unloaded };
 });
 
 // ---------------------------------------------------------------------------
