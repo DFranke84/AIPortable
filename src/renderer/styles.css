@@ -477,6 +477,7 @@ button, input, select, textarea { font-family: inherit; }
 .app-modal-input.hidden { display: none; }
 
 /* ZIM archive picker — opens above the composer from the 🗃️ button */
+.zim-picker.hidden { display: none; }
 .zim-picker { margin: 0 20px; padding: 10px 12px; border: 1px solid var(--border); border-bottom: none; border-radius: var(--radius) var(--radius) 0 0; background: var(--panel-raised); }
 .zim-picker-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .zim-picker-title { font-size: 13px; font-weight: 600; flex: 1; }
