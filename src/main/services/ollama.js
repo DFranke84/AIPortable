@@ -32,6 +32,26 @@ class OllamaManager {
   constructor() {
     this.currentModel = null;
     this.currentRequest = null; // in-flight request, so abortGeneration() can kill it
+    this.onReload = null; // ({ model, from, to }) => void — set by main.js to tell the UI
+  }
+
+  // Ollama reloads a model whenever a request's num_ctx differs from the one
+  // it's loaded with — larger, smaller, or left out entirely (measured
+  // 2026-10-17: the auto chat-title request, which sent no num_ctx, reloaded
+  // a 16K model back to the 4K default, then the next ZIM question reloaded
+  // it to 16K again). So no request ever shrinks a loaded model: a missing or
+  // smaller num_ctx becomes the resident size. A request that needs MORE
+  // still reloads, and is reported through onReload so the UI can say so.
+  async fitOptions(model, options) {
+    let resident = null;
+    try {
+      resident = (await request('/api/ps')).models?.find((m) => m.name === model || m.model === model);
+    } catch { /* can't tell — send as asked */ }
+    if (!resident?.context_length) return options; // not loaded yet: an ordinary first load
+    const want = options?.num_ctx;
+    if (!want || want <= resident.context_length) return { ...(options || {}), num_ctx: resident.context_length };
+    this.onReload?.({ model, from: resident.context_length, to: want });
+    return options;
   }
 
   async checkConnection() {
@@ -79,7 +99,8 @@ class OllamaManager {
   // Streams NDJSON chat tokens to `onToken`. Returns once the stream ends.
   // `options` is forwarded as-is into Ollama's request body (e.g. num_ctx) —
   // see the num_ctx override in chat:send for why a vision request needs one.
-  chatStream({ model, messages, options }, onToken) {
+  async chatStream({ model, messages, options }, onToken) {
+    options = await this.fitOptions(model, options);
     return new Promise((resolve, reject) => {
       // keep_alive: -1 tells Ollama to keep the model resident indefinitely
       // instead of evicting it after its default 5-minute idle timer — once
@@ -148,12 +169,15 @@ class OllamaManager {
   // something cosmetic.
   async generateTitle(model, userText) {
     try {
+      const options = await this.fitOptions(model, undefined);
       const res = await request('/api/chat', {
         method: 'POST',
         body: {
           model,
           stream: false,
-          keep_alive: -1, // don't let this reset the model's idle timer to the 5-minute default — see chatStream
+          think: false, // a thinking model otherwise reasons at length over a 3-6 word title
+          keep_alive: -1,
+          ...(options ? { options } : {}), // don't let this reset the model's idle timer to the 5-minute default — see chatStream
           messages: [
             {
               role: 'system',
@@ -187,6 +211,7 @@ class OllamaManager {
   // both times and never actually left memory.
   async identifyImage(model, imageBase64, options) {
     try {
+      options = await this.fitOptions(model, options);
       const res = await request('/api/chat', {
         method: 'POST',
         body: {
@@ -220,6 +245,7 @@ class OllamaManager {
   // follows, for the same reload reason as identifyImage.
   async searchKeywords(model, messages, options) {
     try {
+      options = await this.fitOptions(model, options);
       const res = await request('/api/chat', {
         method: 'POST',
         // think: false — a thinking model otherwise reasons for a minute or more
@@ -236,6 +262,7 @@ class OllamaManager {
   // the model's reply, the tool calls it asked for in a runtime-neutral
   // shape, and the assistant message to append before the tool results.
   async chatTools(model, messages, tools, options) {
+    options = await this.fitOptions(model, options);
     const res = await request('/api/chat', {
       method: 'POST',
       body: { model, messages, tools, stream: false, think: false, keep_alive: -1, ...(options ? { options } : {}) },
@@ -270,6 +297,7 @@ class OllamaManager {
   // /api/generate request) — the "Load model" button. `options.num_ctx` must
   // match the chat that follows, or Ollama reloads it then anyway.
   async loadModel(name, options) {
+    options = await this.fitOptions(name, options);
     const res = await request('/api/generate', { method: 'POST', body: { model: name, keep_alive: -1, ...(options ? { options } : {}) } });
     if (res?.error) throw new Error(res.error);
     return true;
