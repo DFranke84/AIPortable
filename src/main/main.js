@@ -1524,6 +1524,29 @@ ipcMain.handle('wikipedia:list', () => {
 
 ipcMain.handle('wikipedia:get-download-status', () => zimDownloader.getStatus());
 
+// Catalog URLs name one dated release (…/wikem_en_all_maxi_2026-07.zim) and Kiwix
+// removes old releases, so the link is only a template: read the Kiwix folder listing
+// and take the newest file with the same name before the date. Falls back to the
+// catalog URL itself when the listing can't be read (offline mirror, odd URL).
+async function latestKiwixUrl(url) {
+  const m = url.match(/^(https?:\/\/[^/]+\/zim\/[^/]+\/)(.+?)_(\d{4}-\d{2}[a-z]?)\.zim$/);
+  if (!m) return url;
+  const [, folder, stem] = m;
+  try {
+    const listing = folder.replace('://lb.download.kiwix.org/', '://download.kiwix.org/');
+    const res = await fetch(listing, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return url;
+    const html = await res.text();
+    const esc = stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const dated = [...html.matchAll(new RegExp(`href="(${esc}_(\\d{4}-\\d{2}[a-z]?)\\.zim)"`, 'g'))];
+    if (!dated.length) return url;
+    dated.sort((a, b) => (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0));
+    return folder + dated[dated.length - 1][1];
+  } catch {
+    return url;
+  }
+}
+
 ipcMain.handle('wikipedia:download', async (e, id) => {
   const { catalog } = readWikipediaCatalog(wikipediaCatalogPath);
   const entry = catalog.zims[id];
@@ -1532,7 +1555,7 @@ ipcMain.handle('wikipedia:download', async (e, id) => {
   const destPath = path.join(getEffectiveWikipediaDir(), id);
   if (fs.existsSync(destPath)) return { success: false, error: 'Already downloaded.' };
 
-  return zimDownloader.download(id, entry.url, destPath);
+  return zimDownloader.download(id, await latestKiwixUrl(entry.url), destPath);
 });
 
 ipcMain.handle('wikipedia:cancel-download', (e, id) => ({ success: zimDownloader.cancel(id) }));
