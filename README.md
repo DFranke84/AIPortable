@@ -63,6 +63,9 @@ src/
 
 ## Run it
 
+On Windows, double-click **`Setup-Windows.bat`** once (it installs everything —
+see [SETUP.md](SETUP.md)), then **`AIPortable.vbs`**. Elsewhere:
+
 ```bash
 npm install
 npm start
@@ -419,7 +422,16 @@ not the whole archive).
   registered in `main.js` (with proper `Range` header support, the same pattern
   the original app used for its own asset/PDF protocol handlers) — fully offline,
   no network involved.
-- **Getting your own `.pmtiles` file**: download a region extract from
+- **Download maps** (bottom of Tools → Maps): a list of regions from
+  `data/maps-catalog.json` — Flathead Valley (38 MB) and Montana (383 MB) up to
+  whole continents — each with a Download button, live progress and Cancel.
+  `services/mapDownloader.js` runs the bundled `pmtiles extract` against
+  Protomaps' daily world build (today's, falling back up to two days), so only
+  the region's tiles are fetched; the finished file lands in `data/maps` and is
+  in the map list straight away. Add a region by adding an entry (name, bbox,
+  optional maxzoom) to the catalog; `resources/maps/DOWNLOAD-MAPS.ps1` and the
+  setup script offer the same list.
+- **Getting your own `.pmtiles` file** otherwise: download a region extract from
   https://protomaps.com/downloads (pick a city/state/country — file sizes range
   from tens of MB to a few GB depending on area and zoom levels), or build one
   yourself with the `pmtiles` CLI (https://docs.protomaps.com/pmtiles/cli):

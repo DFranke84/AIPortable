@@ -1,188 +1,103 @@
 # AIPortable — First-Time Setup
 
-This is a **bare-basics copy** of AIPortable: source code, folder structure,
-and setup scripts only. It deliberately does **not** include:
-
-- Any downloaded model weights (`data/models` starts empty)
-- Any offline map tiles (`resources/maps` and `data/maps` start empty)
-- A local Ollama install (downloaded fresh by the setup script below)
-- Any chat history or uploaded library documents
-
-Everything above is either fetched by the setup script, downloaded from
-inside the app itself on demand, or filled in by you later. Follow the steps
-below in order to get a brand-new machine from "just this folder" to
-"chatting with a local model."
-
-## What you'll end up with
-
-An Electron desktop app that talks to a local Ollama instance for AI chat —
-fully offline once set up, no account, no cloud calls, no license key. See
-[README.md](README.md) for the full feature list (Library/RAG search, offline
-maps, voice input, mobile sync, etc).
+A fresh copy of AIPortable is just the source code, the catalogs in `data\`
+and the setup scripts. Everything else — Node.js, Electron, Ollama, Kiwix,
+voice input, the map tool, models and maps — is downloaded by **one
+double-click**.
 
 ## Prerequisites
 
-- **Windows 10/11, 64-bit.** (macOS/Linux can run this too, but the
-  automated `setup.ps1` script below is Windows-only — see the note at the
-  bottom for other platforms.)
-- **Internet access** for the one-time setup step below. Not needed again
-  afterward except when you choose to pull a new model.
-- **A few GB of free disk space** for the app itself and Ollama, plus
-  however much you'll use for models you choose to download later (a small
-  chat model is ~1-2 GB; bigger ones can be 10+ GB each).
-- Not required in advance, but useful to know: if a native-module rebuild
-  step ever fails during setup, installing "Desktop development with C++"
-  from the Visual Studio Build Tools fixes it. Most machines won't need
-  this.
+- **Windows 10/11, 64-bit.**
+- **Internet access** for the one-time setup. Not needed afterwards, except
+  to download more models or maps.
+- **Disk space:** about 3 GB for the app and its tools, plus whatever models
+  (2–20 GB each) and maps (38 MB – 26 GB each) you pick.
 
 ## Step 1 — Put the folder where you want it
 
-Copy this entire `AIPortable2` folder to wherever you want the app to live
-permanently — a fixed folder like `E:\AIPortable`, or a USB/portable drive.
-Everything the app needs at runtime (chat history, downloaded models,
-imported maps, uploaded library docs) is stored inside this same folder
-under `data\`, not scattered into your Windows user profile — so the whole
-thing stays self-contained and movable.
+Copy the whole `AIPortable` folder to where it should live — a fixed folder
+like `E:\AIPortable`, or a USB drive. Chats, models, maps and library
+documents are all stored inside it under `data\`, so it stays self-contained
+and movable.
 
-## Step 2 — Run the setup script
+## Step 2 — Double-click `Setup-Windows.bat`
 
-Open the folder, go into `scripts`, and either:
+It asks two questions first, then runs on its own:
 
-- Right-click **`setup.ps1`** → **Run with PowerShell**, or
-- Open a terminal in the project root and run:
+1. **Which chat model to download.** It detects your graphics card's memory
+   and shows the matching model catalog (4K/8K/12K/24K/32K). Type a number —
+   the first *General* model is a good choice — or press Enter to skip.
+2. **Which offline map regions to download** (from `data\maps-catalog.json`):
+   from the Flathead Valley (38 MB) or Montana (383 MB) up to whole
+   continents. Type numbers, or press Enter to skip.
 
-```bash
-powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
-```
+Then it installs, without admin rights and without changing anything outside
+this folder:
 
-This one script does everything needed to get the environment ready:
+| What | Where | Size |
+|---|---|---|
+| Node.js (portable, only used for installing) | `runtime\node` | ~30 MB |
+| Electron and the app's other dependencies | `node_modules` | ~300 MB |
+| Ollama (runs the AI models) | `resources\ollama\win` | ~1.5 GB |
+| Kiwix (Wikipedia viewer and ZIM search in chat) | `resources\kiwix\win` | ~15 MB |
+| Voice input (whisper.cpp + English model) | `resources\whisper\win` | ~150 MB |
+| Map download tool (pmtiles) | `resources\maps\tools` | ~18 MB |
+| Search model `nomic-embed-text` (Library search) | `data\models` | 274 MB |
+| The chat model and maps you picked | `data\models`, `data\maps` | your choice |
 
-1. **Checks for Node.js** (22.12+). If it's missing and `winget` is available,
-   it installs Node.js LTS automatically — you'll need to close and re-open
-   your terminal afterward and run the script again so the newly-installed
-   `node` is picked up on PATH. If `winget` isn't available, it prints a
-   link to https://nodejs.org/ and stops so you can install it by hand.
-2. **Runs `npm install`**, which pulls in Electron and every other
-   dependency, copies the MapLibre/pmtiles map-viewer assets into
-   `src/renderer/vendor/`, and rebuilds the `better-sqlite3` native module
-   against Electron's bundled Node (this all happens automatically via
-   existing `postinstall` wiring — nothing to do by hand). This step needs
-   internet access and can take a few minutes.
-3. **Downloads a portable copy of Ollama for Windows** directly from
-   Ollama's GitHub releases and unpacks it into `resources\ollama\win\`.
-   This means Ollama does **not** need to be installed system-wide — no
-   admin rights, nothing added to PATH or the registry. The app finds and
-   runs this bundled copy itself. (If you'd rather install Ollama the
-   normal way instead, run the script with `-SkipOllama` and grab it from
-   https://ollama.com/download.)
-4. **Creates the empty runtime folders** (`data\models`, `data\library`,
-   `data\maps`) if they don't already exist.
+At the end it checks everything is in place and offers to start the app.
 
-If anything fails partway through, the script prints what went wrong and how
-to fix it — re-run it after fixing the issue; it's safe to run more than
-once (it skips anything already done, e.g. it won't re-download Ollama if
-it's already there).
+It's safe to run again any time — it skips whatever is already there, so a
+second run just fills in anything missing.
 
-## Step 3 — Launch the app
+**Optional flags** (add them after the file name in a command prompt), e.g.
+`Setup-Windows.bat -Model qwen2.5:3b -Maps montana,world`:
 
-Double-click **`AIPortable.vbs`** (starts silently, no console window), or
-**`Start-AIPortable-With-Console.bat`** if you'd rather see a console with
-any log output.
+| Flag | Effect |
+|---|---|
+| `-Model name` / `-SkipModels` | Download this chat model without asking / no models at all |
+| `-Maps a,b` / `-SkipMaps` | Download these map regions without asking / no maps |
+| `-NoVoice` | Leave out voice input |
+| `-SkipOllama` | Use a system-wide Ollama instead of the portable copy |
+| `-UseWinget` | Install Node.js system-wide with winget instead of the portable copy |
+| `-NoLaunch` | Don't offer to start the app at the end |
 
-The app window should open to an empty chat with no models installed yet —
-that's expected.
+## Step 3 — Start the app
 
-## Step 4 — Get your first model
+Double-click **`AIPortable.vbs`** (no console window), or
+**`Start-AIPortable-With-Console.bat`** to see the log.
 
-Open **Tools → Models** inside the app:
+## Later: more models, maps and archives
 
-1. Pick the GPU size tier(s) that match your graphics card at the top of the
-   tab (unsure? leave all selected — it just changes which curated list you
-   see, not what you can run).
-2. Click any model to pull it. A small chat model like `qwen2.5:3b` or
-   `llama3.2:1b` is a good first pick — a couple of GB, fast to download,
-   fast to respond.
-3. Optionally also pull **`nomic-embed-text`** — this enables semantic
-   (meaning-based) search in the Library tab, on top of plain keyword
-   search which works without it.
-
-Once a model finishes downloading, pick it from the model dropdown at the
-top of the chat and start talking to it.
-
-(You can also do this from a terminal instead of the UI, if you prefer —
-with the app or a portable `ollama serve` running: `ollama pull qwen2.5:3b`.)
-
-## Step 5 (optional) — Offline maps
-
-The Maps tab works with zero setup (it'll just show "no map loaded" until
-you add one). To add offline map tiles:
-
-- See **[resources/maps/DOWNLOAD-MAPS.ps1](resources/maps/DOWNLOAD-MAPS.ps1)**
-  — a placeholder script with the exact commands and links for downloading
-  or extracting `.pmtiles` region files. Fill in the regions you want and
-  run it, or just follow the instructions in it to grab a file manually from
-  https://protomaps.com/downloads.
-- A portable copy of the `pmtiles` CLI (needed for extracting a custom
-  region yourself, i.e. Option B in that script) is already bundled as a zip
-  at `resources\maps\tools\go-pmtiles_1.31.2_Windows_x86_64.zip`. Extract
-  `pmtiles.exe` from it into `resources\maps\tools\pmtiles.exe` before
-  running `DOWNLOAD-MAPS.ps1` — either do this by hand (right-click the zip
-  → "Extract All..." → extract straight into `resources\maps\tools\`, not
-  into a new subfolder), or just run `DOWNLOAD-MAPS.ps1` itself, which
-  extracts it automatically the first time if `pmtiles.exe` isn't there yet.
-- Once you have a `.pmtiles` file, use **Maps tab → "Import local
-  .pmtiles..."** inside the app to load it (it gets copied into the app's
-  data folder and served fully offline from then on).
-
-## Step 6 (optional) — Voice input
-
-The mic button works with zero setup too (it just tells you it's
-unavailable). To enable it, you need a whisper.cpp server build — see
-**[resources/whisper/win/PLACE_BINARY_HERE.txt](resources/whisper/win/PLACE_BINARY_HERE.txt)**
-for exactly what to download and where it goes.
+- **Models:** Tools → Models.
+- **Maps:** Tools → Maps → *Download maps* — the same catalog as setup. To add
+  a region of your own, add an entry to `data\maps-catalog.json` (a name and a
+  bounding box from https://boundingbox.klokantech.com/). Or run
+  `resources\maps\DOWNLOAD-MAPS.ps1`.
+- **Wikipedia and other .zim archives:** Tools → Wikipedia (catalog
+  downloads), or point Tools → Library → *ZIM archive folders* at folders you
+  already have.
 
 ## Troubleshooting
 
-- **"Setup isn't finished yet" popup when launching the app** — you haven't
-  run `scripts\setup.ps1` (or it didn't finish `npm install` successfully).
-  Go back to Step 2.
-- **Antivirus flags `ollama.exe` or quarantines it** — this is a known false
-  positive some antivirus vendors have had with Ollama's Windows build (it's
-  an unsigned, LLM-inference binary that behaves unusually to some
-  heuristics). Verify you got it from the official
-  `github.com/ollama/ollama/releases` page (which `setup.ps1` does
-  automatically) and add an exclusion if needed.
-- **`npm install` fails on a native module** — install "Desktop development
-  with C++" via the Visual Studio Build Tools, then re-run `setup.ps1`.
-- **Model pulls are slow / disk fills up fast** — you're likely running off
-  a USB drive. Tools → Models has a "Choose folder on this PC..." option to
-  point Ollama's model storage at a faster local drive instead of the
-  portable folder; see the "Model storage location" section in
-  [README.md](README.md).
-- **A different app already has Ollama running** — the System tab will warn
-  you if a pre-existing Ollama instance answered first (its own tray app, a
-  system service). Quit that instance and relaunch AIPortable so it can
-  start and manage its own bundled copy instead.
+- **"Setup isn't finished yet" when starting the app** — run
+  `Setup-Windows.bat` (again); it fills in whatever is missing.
+- **Antivirus quarantines `ollama.exe`** — a known false positive with
+  Ollama's Windows build. Setup downloads it from the official
+  `github.com/ollama/ollama` releases; add an exclusion if needed.
+- **npm fails on a native module** — install "Desktop development with C++"
+  from the Visual Studio Build Tools, then run setup again.
+- **Model downloads are slow or fill a USB drive** — Tools → Models → *Choose
+  folder on this PC* moves model storage to a faster local drive.
+- **Another Ollama is already running** (its tray app or a service) — quit it
+  and start AIPortable again so it can run its own copy; setup also warns
+  that models would go to that other instance's folder.
+- **A map region fails to download** — Protomaps keeps only about a week of
+  daily world builds online; setup and the app try the last three days
+  automatically. Try again later if all three fail.
 
 ## macOS / Linux
 
-`setup.ps1` is Windows-only. On macOS or Linux:
-
-```bash
-npm install
-```
-
-then install Ollama normally for your platform from https://ollama.com/download
-(or see the `PLACE_BINARY_HERE.txt` placeholders under `resources/ollama/mac`
-and `resources/ollama/linux` if you want a fully portable, nothing-to-install
-build instead — same idea as the Windows one, just done by hand). Launch with:
-
-```bash
-npm start
-```
-
-## What's next
-
-Once you're up and running, see [README.md](README.md) for the full feature
-walkthrough — Library/RAG document search, chat export, mobile sync, model
-catalog customization, and more.
+The setup script is Windows-only. Elsewhere: `npm install`, install Ollama
+from https://ollama.com/download (or place portable builds as described in
+the `PLACE_BINARY_HERE.txt` files under `resources\`), then `npm start`.

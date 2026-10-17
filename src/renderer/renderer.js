@@ -183,6 +183,7 @@ const els = {
   mapSearchResults: document.getElementById('map-search-results'),
   mapSearchStatus: document.getElementById('map-search-status'),
   mapFiles: document.getElementById('map-files'),
+  mapCatalogList: document.getElementById('map-catalog-list'),
   mapMeasureToggle: document.getElementById('map-measure-toggle'),
   mapMeasureClear: document.getElementById('map-measure-clear'),
   mapMeasureResult: document.getElementById('map-measure-result'),
@@ -1303,7 +1304,7 @@ function showTab(name) {
   if (name === 'models') { refreshBackendControl(); refreshModelsLocation(); refreshCatalogTiers(); refreshContextSizeControl(); }
   if (name === 'library') { refreshZimFolders(); refreshUploads(); populateCategorySelect(els.libraryUploadCategory, { allowNew: true }); refreshResearchStatus(); }
   if (name === 'mobile') { refreshMobileStatus(); }
-  if (name === 'maps') { initMapsTab(); }
+  if (name === 'maps') { initMapsTab(); refreshMapCatalog(); }
   if (name === 'wikipedia') { refreshWikipediaManage(); }
   if (name === 'system') { refreshSystemInfo(); }
 }
@@ -3281,6 +3282,126 @@ async function refreshMapFiles() {
     els.mapFiles.appendChild(item);
   }
 }
+
+// ---- Download maps (Tools → Maps), from data/maps-catalog.json ----
+// Same look as the Wikipedia catalog: a Download button that turns into a
+// live percentage, a progress bar and a Cancel button. A finished region
+// shows up in the map list straight away.
+async function refreshMapCatalog() {
+  const { catalog, error, status, toolReady } = await window.localAI.mapsGetCatalog();
+  const list = els.mapCatalogList;
+  list.innerHTML = '';
+  const note = (text, danger) => {
+    const p = document.createElement('p');
+    p.className = 'panel-hint';
+    if (danger) p.style.color = 'var(--danger)';
+    p.textContent = text;
+    list.appendChild(p);
+  };
+  if (error) { note(`Couldn't read the map catalog (${error}).`, true); return; }
+  if (!toolReady) note('The map download tool (pmtiles) is missing — run Setup-Windows.bat again to add it.', true);
+
+  const weights = catalog.groups || {};
+  const groups = new Map();
+  for (const [key, r] of Object.entries(catalog.regions)) {
+    const g = r.group || 'Other';
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push([key, r]);
+  }
+  const order = [...groups.keys()].sort((a, b) => (weights[a] ?? Infinity) - (weights[b] ?? Infinity) || a.localeCompare(b));
+  for (const g of order) {
+    const heading = document.createElement('h4');
+    heading.className = 'panel-subhead';
+    heading.textContent = g;
+    list.appendChild(heading);
+    for (const [key, r] of groups.get(g)) {
+      const progress = status[key];
+      const item = document.createElement('div');
+      item.className = 'catalog-item';
+      const row = document.createElement('div');
+      row.className = 'row';
+      const info = document.createElement('div');
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = r.name || key;
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = `${r.size || '?'} · ${key}.pmtiles`;
+      info.append(name, meta);
+      const actions = document.createElement('div');
+      actions.className = 'catalog-actions';
+      const btn = document.createElement('button');
+      btn.className = `pull-btn${r.downloaded ? ' installed' : ''}`;
+      btn.dataset.id = key;
+      btn.textContent = r.downloaded ? 'Downloaded' : progress ? `${progress.progress}%` : 'Download';
+      btn.disabled = r.downloaded || !!progress || !toolReady;
+      actions.appendChild(btn);
+      if (progress) {
+        const cancel = document.createElement('button');
+        cancel.className = 'icon-delete-btn cancel-btn';
+        cancel.title = 'Cancel download';
+        cancel.textContent = '✕';
+        cancel.onclick = async () => { await window.localAI.mapsCancelDownload(key); refreshMapCatalog(); };
+        actions.appendChild(cancel);
+      }
+      row.append(info, actions);
+      const desc = document.createElement('div');
+      desc.className = 'desc';
+      desc.textContent = r.description || '';
+      item.append(row, desc);
+      if (progress) updateMapProgressUI({ id: key, ...progress }, item);
+      if (!r.downloaded && !progress && toolReady) {
+        btn.onclick = async () => {
+          btn.disabled = true;
+          btn.textContent = '0%';
+          // Not awaited first: the main process registers the download
+          // synchronously, so this refresh already shows the Cancel button.
+          const pending = window.localAI.mapsDownload(key);
+          await refreshMapCatalog();
+          const result = await pending;
+          if (!result.success && result.error !== 'Cancelled') await showAppAlert(`Couldn't download "${r.name || key}": ${result.error}`);
+          refreshMapCatalog();
+        };
+      }
+      list.appendChild(item);
+    }
+  }
+}
+
+// In-place update for frequent progress events (a full re-render per tick
+// would make the tab stutter) — same approach as the Wikipedia catalog.
+function updateMapProgressUI(data, itemEl) {
+  const btn = itemEl ? itemEl.querySelector('.pull-btn') : els.mapCatalogList.querySelector(`.pull-btn[data-id="${data.id}"]`);
+  if (!btn) return;
+  btn.textContent = `${data.progress}%`;
+  const item = btn.closest('.catalog-item') || itemEl;
+  let bar = item.querySelector('.progress-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'progress-bar';
+    const fill = document.createElement('div');
+    fill.className = 'progress-fill';
+    bar.appendChild(fill);
+    item.appendChild(bar);
+  }
+  bar.querySelector('.progress-fill').style.width = `${data.progress}%`;
+  let detail = item.querySelector('.progress-detail');
+  if (!detail) {
+    detail = document.createElement('div');
+    detail.className = 'meta progress-detail';
+    item.appendChild(detail);
+  }
+  detail.textContent = data.total ? formatWikipediaProgressDetail(data) : 'Working out which map tiles to fetch…';
+}
+
+window.localAI.onMapsDownloadProgress((data) => updateMapProgressUI(data));
+window.localAI.onMapsDownloadComplete(async () => {
+  refreshMapCatalog();
+  refreshMapFiles();
+  await populateMapSources();
+  refreshDefaultStar();
+});
+window.localAI.onMapsDownloadError(() => refreshMapCatalog());
 
 async function populateMapSources() {
   const files = await window.localAI.mapsList();

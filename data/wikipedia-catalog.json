@@ -1,0 +1,165 @@
+{
+  "categories": {
+    "General Reference": 1,
+    "History": 2,
+    "Medical": 3,
+    "Practical / Self-Reliance": 4,
+    "Travel": 5,
+    "Language": 6,
+    "Q&A": 7
+  },
+  "zims": {
+    "wikipedia_en-simple_all_nopic.zim": {
+      "name": "Wikipedia (Simple English, text-only)",
+      "category": "General Reference",
+      "size": "990 MB",
+      "articleCount": 396632,
+      "description": "Full Simple English Wikipedia, no images. The best starting point — plain-language articles on almost everything, at a size that downloads and searches fast.",
+      "url": "https://lb.download.kiwix.org/zim/wikipedia/wikipedia_en-simple_all_nopic_2026-06.zim"
+    },
+    "wikipedia_en-simple_all_maxi.zim": {
+      "name": "Wikipedia (Simple English, with images)",
+      "category": "General Reference",
+      "size": "3.5 GB",
+      "articleCount": 396632,
+      "description": "Same Simple English Wikipedia as above, but with every article's images included.",
+      "url": "https://lb.download.kiwix.org/zim/wikipedia/wikipedia_en-simple_all_maxi_2026-06.zim"
+    },
+    "wikipedia_en_all_mini.zim": {
+      "name": "Wikipedia (English, condensed)",
+      "category": "General Reference",
+      "size": "12.5 GB",
+      "articleCount": 19183502,
+      "description": "Every English Wikipedia article, condensed to its lead section — full breadth of topics without the full-size download.",
+      "url": "https://lb.download.kiwix.org/zim/wikipedia/wikipedia_en_all_mini_2026-06.zim"
+    },
+    "wikipedia_en_all_nopic.zim": {
+      "name": "Wikipedia (English, full text)",
+      "category": "General Reference",
+      "size": "52.7 GB",
+      "articleCount": 19191219,
+      "description": "The complete English Wikipedia, full article text, no images. The real thing — plan for a large drive and a patient first download.",
+      "url": "https://lb.download.kiwix.org/zim/wikipedia/wikipedia_en_all_nopic_2026-06.zim"
+    },
+    "wikipedia_en_all_maxi.zim": {
+      "name": "Wikipedia (English, full text + images)",
+      "category": "General Reference",
+      "size": "127 GB",
+      "articleCount": 21673012,
+      "description": "The complete English Wikipedia with every article's images included — the largest option here by a wide margin. Make sure you actually have 130+ GB free before starting.",
+      "url": "https://lb.download.kiwix.org/zim/wikipedia/wikipedia_en_all_maxi_2026-08.zim"
+    },
+    "wikipedia_en_history_nopic.zim": {
+      "name": "History by Wikipedia (text-only)",
+      "category": "History",
+      "size": "735 MB",
+      "articleCount": 224312,
+      "description": "A curated slice of Wikipedia's history articles — world history broadly, so UK and US history are both well covered, just not split into their own archives (kiwix doesn't publish country-specific history wikis).",
+      "url": "https://lb.download.kiwix.org/zim/wikipedia/wikipedia_en_history_nopic_2026-07.zim"
+    },
+    "wikipedia_en_history_maxi.zim": {
+      "name": "History by Wikipedia (with images)",
+      "category": "History",
+      "size": "2.4 GB",
+      "articleCount": 224313,
+      "description": "Same history-article selection as above, with images included.",
+      "url": "https://lb.download.kiwix.org/zim/wikipedia/wikipedia_en_history_maxi_2026-07.zim"
+    },
+    "wikem_en_all_nopic.zim": {
+      "name": "WikEM — Emergency Medicine (text-only)",
+      "category": "Medical",
+      "size": "347 MB",
+      "articleCount": 107952,
+      "description": "A crowd-sourced emergency medicine reference — symptoms, treatment protocols, drug dosing. One of the highest-value small downloads for offline medical reference.",
+      "url": "https://lb.download.kiwix.org/zim/other/wikem_en_all_nopic_2026-07.zim"
+    },
+    "wikem_en_all_maxi.zim": {
+      "name": "WikEM — Emergency Medicine (with images)",
+      "category": "Medical",
+      "size": "375 MB",
+      "articleCount": 107945,
+      "description": "Same WikEM reference as above, with clinical photos and diagrams included — barely larger than the text-only version.",
+      "url": "https://lb.download.kiwix.org/zim/other/wikem_en_all_maxi_2026-07.zim"
+    },
+    "ifixit_en_all.zim": {
+      "name": "iFixit — Repair Guides",
+      "category": "Practical / Self-Reliance",
+      "size": "3.6 GB",
+      "articleCount": 103480,
+      "description": "Step-by-step repair guides with photos for electronics, appliances, vehicles, and more — useful when replacement parts and internet access aren't both available. Already includes images (no text-only version exists).",
+      "url": "https://lb.download.kiwix.org/zim/ifixit/ifixit_en_all_2025-12.zim"
+    },
+    "diy.stackexchange.com_en_all.zim": {
+      "name": "Home Improvement Stack Exchange",
+      "category": "Practical / Self-Reliance",
+      "size": "2.1 GB",
+      "articleCount": 165653,
+      "description": "How-to Q&A for home repair, renovation, and DIY projects — real questions and vetted answers, the closest thing here to WikiHow (which kiwix no longer distributes).",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/diy.stackexchange.com_en_all_2026-08.zim"
+    },
+    "survivorlibrary.com_en_all.zim": {
+      "name": "Survivor Library — Pre-1970s Trade & Practical Skills (⚠ 252 GB)",
+      "category": "Practical / Self-Reliance",
+      "size": "252 GB",
+      "articleCount": 14940,
+      "description": "A huge scanned-book archive of pre-industrial and early-industrial trade knowledge — blacksmithing, farming, construction, mechanics, textiles, and more. Opt-in only: this is by far the largest thing in the catalog, so make sure you actually have 260+ GB free and a stable connection before starting.",
+      "url": "https://lb.download.kiwix.org/zim/zimit/survivorlibrary.com_en_all_2025-12.zim"
+    },
+    "appropedia_en_all_maxi.zim": {
+      "name": "Appropedia — Sustainability & Off-Grid Living",
+      "category": "Practical / Self-Reliance",
+      "size": "582 MB",
+      "articleCount": 30736,
+      "description": "Appropriate-technology and sustainable-living wiki: water, energy, building, and food-growing techniques for low-resource or off-grid settings. Already includes images (no text-only version exists).",
+      "url": "https://lb.download.kiwix.org/zim/other/appropedia_en_all_maxi_2026-02.zim"
+    },
+    "energypedia_en_all_nopic.zim": {
+      "name": "Energypedia — Off-Grid Energy (text-only)",
+      "category": "Practical / Self-Reliance",
+      "size": "723 MB",
+      "articleCount": null,
+      "description": "Renewable and off-grid energy systems — solar, biogas, micro-hydro, mini-grids — aimed at practical, low-resource deployment.",
+      "url": "https://lb.download.kiwix.org/zim/other/energypedia_en_all_nopic_2026-06.zim"
+    },
+    "energypedia_en_all_maxi.zim": {
+      "name": "Energypedia — Off-Grid Energy (with images)",
+      "category": "Practical / Self-Reliance",
+      "size": "800 MB",
+      "articleCount": null,
+      "description": "Same Energypedia reference as above, with diagrams and photos included.",
+      "url": "https://lb.download.kiwix.org/zim/other/energypedia_en_all_maxi_2026-06.zim"
+    },
+    "wikivoyage_en_all_nopic.zim": {
+      "name": "Wikivoyage — Travel Guide (text-only)",
+      "category": "Travel",
+      "size": "233 MB",
+      "articleCount": 67558,
+      "description": "Worldwide travel guide — regions, routes, border crossings, and practical on-the-ground advice, text-only.",
+      "url": "https://lb.download.kiwix.org/zim/wikivoyage/wikivoyage_en_all_nopic_2026-06.zim"
+    },
+    "wikivoyage_en_all_maxi.zim": {
+      "name": "Wikivoyage — Travel Guide (with images)",
+      "category": "Travel",
+      "size": "1.14 GB",
+      "articleCount": 67558,
+      "description": "Same Wikivoyage guide as above, with maps and photos included.",
+      "url": "https://lb.download.kiwix.org/zim/wikivoyage/wikivoyage_en_all_maxi_2026-06.zim"
+    },
+    "wiktionary_en_all_nopic.zim": {
+      "name": "Wiktionary — English Dictionary",
+      "category": "Language",
+      "size": "9.2 GB",
+      "articleCount": 9129949,
+      "description": "The complete English-language Wiktionary — definitions, etymology, and translations across thousands of languages. Dictionary content, so there's no meaningful image-included version.",
+      "url": "https://lb.download.kiwix.org/zim/wiktionary/wiktionary_en_all_nopic_2026-08.zim"
+    },
+    "outdoors.stackexchange.com_en_all.zim": {
+      "name": "Outdoors Stack Exchange",
+      "category": "Q&A",
+      "size": "141 MB",
+      "articleCount": 12969,
+      "description": "Q&A for backpacking, hiking, camping, and outdoor gear — real questions and vetted answers from an experienced community.",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/outdoors.stackexchange.com_en_all_2026-08.zim"
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "_about": "Offline map regions offered in Tools -> Maps -> Download maps, in setup, and by resources\\maps\\DOWNLOAD-MAPS.ps1. Each key is the file name it's saved as (data\\maps\\<key>.pmtiles). bbox = min_lon,min_lat,max_lon,max_lat (find one at https://boundingbox.klokantech.com/); leave it out for the whole planet. maxzoom limits detail (and size). Sizes were measured with 'pmtiles extract --dry-run' on 2026-10-17 and grow a little as the map data does. Maps are cut from Protomaps' daily world build: https://build.protomaps.com/",
+  "source": "https://build.protomaps.com/{date}.pmtiles",
+  "groups": {
+    "Local": 1,
+    "United States": 2,
+    "Canada": 3,
+    "Europe": 4,
+    "Asia & Pacific": 5,
+    "World": 6
+  },
+  "regions": {
+    "flathead": {
+      "name": "Flathead Valley (Kalispell, Whitefish, Glacier)",
+      "group": "Local",
+      "bbox": "-115.4,47.6,-113.2,49.05",
+      "size": "38 MB",
+      "description": "Full street detail for the Flathead area - quick to download."
+    },
+    "montana": {
+      "name": "Montana",
+      "group": "Local",
+      "bbox": "-116.05,44.36,-104.04,49.0",
+      "size": "383 MB",
+      "description": "The whole state, full street detail."
+    },
+    "pacific-northwest": {
+      "name": "Pacific Northwest (WA, OR, ID, MT)",
+      "group": "United States",
+      "bbox": "-124.85,41.98,-104.04,49.01",
+      "size": "1.7 GB",
+      "description": "Washington, Oregon, Idaho and Montana, full street detail."
+    },
+    "us-west": {
+      "name": "Western United States",
+      "group": "United States",
+      "bbox": "-125,31.3,-102,49.1",
+      "size": "4.9 GB",
+      "description": "Everything west of roughly Denver, full street detail."
+    },
+    "usa": {
+      "name": "United States (lower 48)",
+      "group": "United States",
+      "bbox": "-125,24,-66,50",
+      "maxzoom": 15,
+      "size": "19 GB",
+      "description": "The contiguous US, full street detail. Large - allow time and disk space."
+    },
+    "alaska": {
+      "name": "Alaska",
+      "group": "United States",
+      "bbox": "-169.365234,53.067627,-138.251953,71.965388",
+      "size": "665 MB",
+      "description": "Full detail."
+    },
+    "canada-west": {
+      "name": "Western Canada",
+      "group": "Canada",
+      "bbox": "-140.800781,48.341646,-100.195313,70.050596",
+      "size": "5.8 GB",
+      "description": "BC, Alberta, Saskatchewan, Yukon and the western Territories."
+    },
+    "canada-east": {
+      "name": "Eastern Canada",
+      "group": "Canada",
+      "bbox": "-101.953125,40.84706,-51.943359,68.431513",
+      "size": "12 GB",
+      "description": "Manitoba east to the Atlantic provinces (includes the US Northeast and Great Lakes)."
+    },
+    "uk": {
+      "name": "United Kingdom & Ireland",
+      "group": "Europe",
+      "bbox": "-8.6,49.8,1.8,60.9",
+      "size": "3.0 GB",
+      "description": "Full detail."
+    },
+    "iceland": {
+      "name": "Iceland",
+      "group": "Europe",
+      "bbox": "-25.334473,62.935235,-12.304688,66.835165",
+      "size": "270 MB",
+      "description": "Full detail."
+    },
+    "nordics": {
+      "name": "Nordic countries",
+      "group": "Europe",
+      "bbox": "4,57.5,31.5,71.5",
+      "size": "7.4 GB",
+      "description": "Norway, Sweden, Finland and Denmark."
+    },
+    "western-europe": {
+      "name": "Western Europe",
+      "group": "Europe",
+      "bbox": "-10,35,19,55.5",
+      "size": "26 GB",
+      "description": "Spain and Portugal to Germany and Italy. Very large."
+    },
+    "japan": {
+      "name": "Japan",
+      "group": "Asia & Pacific",
+      "bbox": "125.793457,30.183122,148.842773,45.996962",
+      "size": "3.5 GB",
+      "description": "Full detail."
+    },
+    "australia": {
+      "name": "Australia",
+      "group": "Asia & Pacific",
+      "bbox": "112,-44,154,-9",
+      "size": "2.2 GB",
+      "description": "Full detail."
+    },
+    "world": {
+      "name": "World overview",
+      "group": "World",
+      "maxzoom": 6,
+      "size": "45 MB",
+      "description": "The whole planet at low detail - countries, states, big cities and main roads. A good small base map."
+    }
+  }
+}

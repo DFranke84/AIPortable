@@ -1,8 +1,12 @@
 # Dependencies (restore with npm install)
 node_modules/
 
-# User data: chats, library, models, maps, Wikipedia (~119 GB)
-data/
+# User data: chats, library, models, maps, Wikipedia (~119 GB) - but keep the
+# hand-edited catalogs that setup and the app read
+data/*
+!data/*-models-catalog.json
+!data/wikipedia-catalog.json
+!data/maps-catalog.json
 
 # Bundled third-party binaries (see SETUP.md for how to obtain)
 resources/ollama/
