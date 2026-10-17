@@ -524,3 +524,8 @@ button, input, select, textarea { font-family: inherit; }
 .zim-folder-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
 .zim-folder-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .zim-folder-row .pull-btn { flex-shrink: 0; }
+
+/* Map picker in the Map view's title bar (moved there from Tools → Maps) */
+.map-view-source-slot { display: flex; align-items: center; margin-left: auto; min-width: 0; }
+.map-view-source-slot .search-row { margin: 0; gap: 6px; }
+.map-view-source-slot .model-select { min-width: 240px; max-width: 420px; }

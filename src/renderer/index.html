@@ -167,6 +167,8 @@
             <button id="map-back-to-chat" class="btn-icon" title="Back to chat">←</button>
             <span class="brand">Map</span>
           </div>
+          <!-- #map-source-row (map picker + default star) moves in here while this view is open -->
+          <div id="map-view-source-slot" class="map-view-source-slot"></div>
         </header>
         <!-- #map-panel-body (search + measure toolbar + canvas + measure
              result) is the same DOM node whether it's sitting in the
@@ -443,8 +445,8 @@
             no map server or live connection needed. Import a <code>.pmtiles</code> file
             to get started.
           </p>
-          <div class="search-row">
-            <select id="map-source" class="model-select" style="flex:1"></select>
+          <div id="map-source-row" class="search-row">
+            <select id="map-source" class="model-select" style="flex:1" title="Which map is showing - pick another to switch"></select>
             <button id="map-set-default" class="btn-icon" title="Set as default map to load">☆</button>
           </div>
           <button id="map-import" class="pull-btn" style="margin-bottom:10px;">Import local .pmtiles…</button>

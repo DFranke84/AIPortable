@@ -6,7 +6,8 @@
     "Practical / Self-Reliance": 4,
     "Travel": 5,
     "Language": 6,
-    "Q&A": 7
+    "Q&A": 7,
+    "Books": 8
   },
   "zims": {
     "wikipedia_en-simple_all_nopic.zim": {
@@ -160,6 +161,198 @@
       "articleCount": 12969,
       "description": "Q&A for backpacking, hiking, camping, and outdoor gear — real questions and vetted answers from an experienced community.",
       "url": "https://lb.download.kiwix.org/zim/stack_exchange/outdoors.stackexchange.com_en_all_2026-08.zim"
+    },
+    "bicycles.stackexchange.com_en_all.zim": {
+      "name": "Bicycles Q&A",
+      "category": "Q&A",
+      "size": "491 MB",
+      "articleCount": 42650,
+      "description": "Stack Exchange Q&A for people involved with bicycles",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/bicycles.stackexchange.com_en_all_2026-08.zim"
+    },
+    "cooking.stackexchange.com_en_all.zim": {
+      "name": "Cooking Q&A (Seasoned Advice)",
+      "category": "Q&A",
+      "size": "237 MB",
+      "articleCount": 59578,
+      "description": "Stack Exchange Q&A for professional and amateur cooking chefs",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/cooking.stackexchange.com_en_all_2026-07.zim"
+    },
+    "crafts.stackexchange.com_en_all.zim": {
+      "name": "Arts & Crafts Q&A",
+      "category": "Q&A",
+      "size": "58 MB",
+      "articleCount": 4950,
+      "description": "Stack Exchange Q&A for artists and crafters",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/crafts.stackexchange.com_en_all_2026-07.zim"
+    },
+    "gardening.stackexchange.com_en_all.zim": {
+      "name": "Gardening & Landscaping Q&A",
+      "category": "Q&A",
+      "size": "927 MB",
+      "articleCount": 32332,
+      "description": "Stack Exchange Q&A for gardeners and landscapers",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/gardening.stackexchange.com_en_all_2026-08.zim"
+    },
+    "gutenberg_en_lcc-pr.zim": {
+      "name": "Project Gutenberg - English literature",
+      "category": "Books",
+      "size": "16 GB",
+      "articleCount": 11841,
+      "description": "Public-domain English literature from Project Gutenberg (Library of Congress class PR): Shakespeare, Dickens, Austen and thousands more, as readable books.",
+      "url": "https://lb.download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-pr_2026-03.zim"
+    },
+    "gutenberg_en_lcc-ps.zim": {
+      "name": "Project Gutenberg - American literature",
+      "category": "Books",
+      "size": "16 GB",
+      "articleCount": 14592,
+      "description": "Public-domain American literature from Project Gutenberg (Library of Congress class PS): Twain, Poe, London, Alcott and thousands more, as readable books.",
+      "url": "https://lb.download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-ps_2026-03.zim"
+    },
+    "ham.stackexchange.com_en_all.zim": {
+      "name": "Amateur Radio Q&A",
+      "category": "Q&A",
+      "size": "76 MB",
+      "articleCount": 9238,
+      "description": "Stack Exchange Q&A for amateur radio enthusiasts",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/ham.stackexchange.com_en_all_2026-08.zim"
+    },
+    "homebrew.stackexchange.com_en_all.zim": {
+      "name": "Homebrewing Q&A",
+      "category": "Q&A",
+      "size": "37 MB",
+      "articleCount": 10999,
+      "description": "Stack Exchange Q&A for dedicated home brewers (beer, wine…) and enthusiasts",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/homebrew.stackexchange.com_en_all_2026-08.zim"
+    },
+    "lifehacks.stackexchange.com_en_all.zim": {
+      "name": "Lifehacks Q&A",
+      "category": "Q&A",
+      "size": "49 MB",
+      "articleCount": 9175,
+      "description": "Stack Exchange Q&A for bypassing life&apos;s everyday problems with simple tricks",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/lifehacks.stackexchange.com_en_all_2026-08.zim"
+    },
+    "mechanics.stackexchange.com_en_all.zim": {
+      "name": "Motor Vehicle Mechanics",
+      "category": "Q&A",
+      "size": "340 MB",
+      "articleCount": 54909,
+      "description": "Stack Exchange Q&A for mechanics and owners of cars, trucks, and motorcycles",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/mechanics.stackexchange.com_en_all_2026-08.zim"
+    },
+    "medlineplus.gov_en_all.zim": {
+      "name": "MedlinePlus",
+      "category": "Medical",
+      "size": "1.9 GB",
+      "articleCount": 17791,
+      "description": "Trusted Health Information for You",
+      "url": "https://lb.download.kiwix.org/zim/zimit/medlineplus.gov_en_all_2025-01.zim"
+    },
+    "nhs.uk_en_medicines.zim": {
+      "name": "NHS' Medicines A to Z",
+      "category": "Medical",
+      "size": "15 MB",
+      "articleCount": 1347,
+      "description": "How medicines work, how and when to take them",
+      "url": "https://lb.download.kiwix.org/zim/zimit/nhs.uk_en_medicines_2026-09b.zim"
+    },
+    "pets.stackexchange.com_en_all.zim": {
+      "name": "Pets Q&A",
+      "category": "Q&A",
+      "size": "87 MB",
+      "articleCount": 17055,
+      "description": "Stack Exchange Q&A for pet owners, caretakers, breeders, veterinarians, trainers",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/pets.stackexchange.com_en_all_2026-08.zim"
+    },
+    "sustainability.stackexchange.com_en_all.zim": {
+      "name": "Sustainable Living Q&A",
+      "category": "Q&A",
+      "size": "28 MB",
+      "articleCount": 4647,
+      "description": "Stack Exchange Q&A for folks dedicated to not depleting available resources",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/sustainability.stackexchange.com_en_all_2026-08.zim"
+    },
+    "wikibooks_en_all_nopic.zim": {
+      "name": "Wikibooks",
+      "category": "General Reference",
+      "size": "3.5 GB",
+      "articleCount": 118571,
+      "description": "The open-content textbooks collection",
+      "url": "https://lb.download.kiwix.org/zim/wikibooks/wikibooks_en_all_nopic_2026-04.zim"
+    },
+    "wikiciv_en_all_maxi.zim": {
+      "name": "WikiCiv",
+      "category": "Practical / Self-Reliance",
+      "size": "5 MB",
+      "articleCount": 441,
+      "description": "The wiki manual for building civilization from scratch",
+      "url": "https://lb.download.kiwix.org/zim/other/wikiciv_en_all_maxi_2025-11.zim"
+    },
+    "wikivet.net_en_all_maxi.zim": {
+      "name": "WikiVet",
+      "category": "Medical",
+      "size": "57 MB",
+      "articleCount": 9481,
+      "description": "The free veterinary medicine encyclopedia",
+      "url": "https://lb.download.kiwix.org/zim/other/wikivet.net_en_all_maxi_2026-07a.zim"
+    },
+    "woodworking.stackexchange.com_en_all.zim": {
+      "name": "Woodworking Q&A",
+      "category": "Q&A",
+      "size": "106 MB",
+      "articleCount": 8501,
+      "description": "Stack Exchange Q&A for professional and amateur woodworkers",
+      "url": "https://lb.download.kiwix.org/zim/stack_exchange/woodworking.stackexchange.com_en_all_2026-08.zim"
+    },
+    "zimgit-food-preparation_en.zim": {
+      "name": "Food for Preppers",
+      "category": "Practical / Self-Reliance",
+      "size": "98 MB",
+      "articleCount": 1,
+      "description": "A collection of recipes and techniques for preparing food.",
+      "url": "https://lb.download.kiwix.org/zim/other/zimgit-food-preparation_en_2025-04.zim"
+    },
+    "zimgit-knots_en.zim": {
+      "name": "A Library of Knots",
+      "category": "Practical / Self-Reliance",
+      "size": "28 MB",
+      "articleCount": 1,
+      "description": "Illustrated resources on all types of knots, ladders, sutures, etc. ",
+      "url": "https://lb.download.kiwix.org/zim/other/zimgit-knots_en_2024-08.zim"
+    },
+    "zimgit-medicine_en.zim": {
+      "name": "Medical Library",
+      "category": "Medical",
+      "size": "70 MB",
+      "articleCount": 1,
+      "description": "A collection of books pertaining to field and emergency medicine.",
+      "url": "https://lb.download.kiwix.org/zim/other/zimgit-medicine_en_2024-08.zim"
+    },
+    "zimgit-post-disaster_en.zim": {
+      "name": "Post Disaster Resource Library",
+      "category": "Practical / Self-Reliance",
+      "size": "645 MB",
+      "articleCount": 1,
+      "description": "A collection of post-disaster resources.",
+      "url": "https://lb.download.kiwix.org/zim/other/zimgit-post-disaster_en_2024-05.zim"
+    },
+    "zimgit-water_en.zim": {
+      "name": "Water Treatment Library",
+      "category": "Practical / Self-Reliance",
+      "size": "21 MB",
+      "articleCount": 1,
+      "description": "Resources about water collection and purification",
+      "url": "https://lb.download.kiwix.org/zim/other/zimgit-water_en_2024-08.zim"
+    },
+    "gardenology.org_en_all.zim": {
+      "name": "Gardenology",
+      "category": "Practical / Self-Reliance",
+      "size": "112 MB",
+      "articleCount": 44083,
+      "description": "A complete plant and garden encyclopedia",
+      "url": "https://lb.download.kiwix.org/zim/other/gardenology.org_en_all_2026-09.zim"
     }
   }
 }
