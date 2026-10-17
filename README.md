@@ -123,8 +123,9 @@ LM Studio's local server for chat instead.
 ## Parts built for one person's setup
 
 - The **map list** starts with the first owner's local area (Flathead Valley and Montana) before the US, Canada,
-  Europe, Asia & Pacific and World regions. Add your own region by adding an entry to `data\maps-catalog.json`
-  (a name and a bounding box - see [SETUP.md](SETUP.md)).
+  Europe, Asia & Pacific and World regions. The Research library's `Build Local Area.bat` adds a **My area** region
+  for your own town at the top; or add one by hand to `data\maps-catalog.json` (a name and a bounding box - see
+  [SETUP.md](SETUP.md)).
 - The model lists include a **Survival** category chosen for practical, preparedness-style questions.
 
 ---
