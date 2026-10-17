@@ -1490,7 +1490,7 @@ ipcMain.handle('wikipedia:open-article', async (e, { file, url }) => {
 // Every .zim in the Wikipedia download folder, the Research library's
 // _sources\zim folder, and the folder of the viewer's current file is
 // searchable. The ticked set and Quick/Thorough mode are remembered per
-// machine (last used) and per chat (chats.zim_settings).
+// chat only (chats.zim_settings) — the app and new chats start with none.
 // ---------------------------------------------------------------------------
 function zimSearchFolders() {
   const research = getResearchRoot();
@@ -1511,7 +1511,6 @@ ipcMain.handle('zim:list-searchable', async () => {
   const books = ok ? await zimSearch.listBooks() : [];
   return {
     books: books.map(({ id, title, ftindex, articles }) => ({ id, title, ftindex, articles })).sort((a, b) => a.title.localeCompare(b.title)),
-    last: { books: hostSettings.zimSearchBooks || [], mode: hostSettings.zimSearchMode === 'thorough' ? 'thorough' : 'quick' },
   };
 });
 
@@ -1524,14 +1523,9 @@ ipcMain.handle('chat:load-model', async (e, { model, options, zim }) => {
   return { success: true };
 });
 
-// The last-used choice alone, without starting the search server.
-ipcMain.handle('zim:get-last', () => ({ books: hostSettings.zimSearchBooks || [], mode: hostSettings.zimSearchMode === 'thorough' ? 'thorough' : 'quick' }));
-
-ipcMain.handle('zim:save-settings', (e, { chatId, books, mode }) => {
-  const settings = { books: Array.isArray(books) ? books : [], mode: mode === 'thorough' ? 'thorough' : 'quick' };
-  hostSettings.zimSearchBooks = settings.books;
-  hostSettings.zimSearchMode = settings.mode;
-  saveHostSettings();
+// titles let a reopened chat name its archives without starting the search server.
+ipcMain.handle('zim:save-settings', (e, { chatId, books, mode, titles }) => {
+  const settings = { books: Array.isArray(books) ? books : [], mode: mode === 'thorough' ? 'thorough' : 'quick', titles: titles || {} };
   if (chatId) getDb().prepare('UPDATE chats SET zim_settings = ? WHERE id = ?').run(JSON.stringify(settings), chatId);
   return { success: true };
 });

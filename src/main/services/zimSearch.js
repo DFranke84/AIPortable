@@ -297,8 +297,12 @@ class ZimSearch {
     const files = new Map((await this.listBooks()).map((b) => [b.id, b.file]));
     const parts = [];
     const sources = [];
+    const seenBodies = new Set();
     for (const a of articles) {
-      if (!a.body) continue;
+      // Redirects ("Bee Stings" -> "Bee sting") reach the same article under
+      // another title; identical text means it's already included.
+      if (!a.body || seenBodies.has(a.body)) continue;
+      seenBodies.add(a.body);
       parts.push(`### ${a.title} (${a.bookTitle})\n${a.body}`);
       // file lets a click on the source open the article in the Wikipedia viewer.
       sources.push({ kind: 'zim', title: a.title, book: a.book, bookTitle: a.bookTitle, url: a.url, file: files.get(a.book) || null });

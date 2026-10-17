@@ -33,6 +33,10 @@ const els = {
   zimPickerNote: document.getElementById('zim-picker-note'),
   zimPickerNone: document.getElementById('zim-picker-none'),
   zimPickerDone: document.getElementById('zim-picker-done'),
+  zimSummary: document.getElementById('zim-summary'),
+  zimSummaryText: document.getElementById('zim-summary-text'),
+  zimSummaryChange: document.getElementById('zim-summary-change'),
+  zimSummaryClear: document.getElementById('zim-summary-clear'),
   themeToggle: document.getElementById('theme-toggle'),
   attachBtn: document.getElementById('attach-btn'),
   attachFile: document.getElementById('attach-file'),
@@ -678,19 +682,22 @@ els.composer.addEventListener('submit', async (e) => {
   if (state.zimBooks.length && zimQuestion) {
     // Same num_ctx as the reply below (ZIM text always triggers the 16K
     // bump), so the model isn't reloaded between research and answer.
-    const zimOptions = { num_ctx: chatNumCtx() };
+    const zimOptions = { num_ctx: await fitResidentCtx(chatNumCtx()) };
     const phase = (label) => { pendingLabel = label; pendingStart = Date.now(); pendingTimerEl.textContent = `${label}…`; };
     // Load the model as its own visible step — otherwise its load time hides
     // inside "Searching" (the keyword step is the model's first use). A
     // no-op when it's already loaded with this context size.
-    phase('Loading model');
-    setModelLoadState('loading');
+    if ((await modelResidency()) !== 'loaded') {
+      phase('Loading model');
+      setModelLoadState('loading');
+    }
     await window.localAI.loadChatModel({ model: state.model, options: zimOptions, zim: true });
+    setModelLoadState('loaded');
     phase('Searching ZIM archives');
     const stopSteps = window.localAI.onZimStep((step) => phase(step));
     const prior = await window.localAI.getHistory(state.chatId);
     const previous = [...prior].reverse().find((m) => m.role === 'user')?.content?.slice(0, 300) || null;
-    window.localAI.zimSaveSettings({ chatId: state.chatId, books: state.zimBooks, mode: state.zimMode });
+    saveZimSettings();
     let zim = { text: '', sources: [], steps: [] };
     try {
       zim = await window.localAI.zimContext({ model: state.model, question: zimQuestion, previous, books: state.zimBooks, mode: state.zimMode, options: zimOptions });
@@ -698,7 +705,7 @@ els.composer.addEventListener('submit', async (e) => {
       zim.steps = [`ZIM search failed: ${ipcErrorText(err)}`];
     }
     stopSteps();
-    phase('Waiting for model');
+    phase('Thinking');
     if (state.aborting) {
       clearInterval(pendingInterval);
       assistantBody.parentElement.remove();
@@ -730,7 +737,14 @@ els.composer.addEventListener('submit', async (e) => {
     });
     assistantBody.parentElement.insertBefore(tag, assistantBody);
   }
-  setModelLoadState('loading');
+  // Only claim "Loading model" when it really isn't resident (with the
+  // context size this request uses) — a loaded model is just thinking.
+  if ((await modelResidency()) === 'loaded') {
+    setModelLoadState('loaded');
+    if (pendingLabel === 'Waiting for model') { pendingLabel = 'Thinking'; pendingTimerEl.textContent = 'Thinking…'; }
+  } else {
+    setModelLoadState('loading');
+  }
 
   const unsubscribe = window.localAI.onChatToken((data) => {
     if (data.streamId !== streamId) return;
@@ -779,7 +793,7 @@ els.composer.addEventListener('submit', async (e) => {
   // below it, so a deliberately small setting on a tiny GPU doesn't quietly
   // get ignored, but also doesn't starve a request that genuinely needs more.
   const needsContextBump = images.length || docAttachments.length || Boolean(contextResult.text) || state.ragEnabled || state.zimBooks.length > 0;
-  const effectiveCtx = needsContextBump ? Math.max(state.contextSize || 0, 16384) : state.contextSize;
+  const effectiveCtx = await fitResidentCtx(needsContextBump ? Math.max(state.contextSize || 0, 16384) : state.contextSize);
   const options = effectiveCtx ? { num_ctx: effectiveCtx } : undefined;
 
   // History budget: whatever the request will actually use for context
@@ -896,30 +910,38 @@ els.ragToggle.addEventListener('click', () => {
   state.ragEnabled = !state.ragEnabled;
   els.ragToggle.classList.toggle('active', state.ragEnabled);
   els.ragToggle.title = state.ragEnabled ? 'Library context: ON — click to disable' : 'Use library context (RAG)';
+  refreshModelLoadState(); // changes the context size the model needs (see chatNumCtx)
 });
 
 // ---- ZIM archive search in chat (main.js zim:* / services/zimSearch.js) ----
 // The 🗃️ button opens a checklist of every searchable .zim plus the
-// Quick/Thorough choice. The choice is saved per chat (on send) and as the
-// last-used default for new chats.
+// Quick/Thorough choice. Nothing is ticked when the app starts or in a new
+// chat; a chat that used archives gets its own choice back when reopened
+// (saved in chats.zim_settings). Whenever archives are ticked, the choice
+// stays on screen — as the full list while open, or a one-line summary.
 let zimBookList = null; // [{ id, title, ftindex, articles }] once loaded
-let zimLastUsed = null; // { books, mode } — the default for chats without their own
+let zimPickerOpen = false;
+let zimTitles = {}; // id -> title, so the summary can name archives without starting the search server
 
 function updateZimToggle() {
   const on = state.zimBooks.length > 0;
   els.zimToggle.classList.toggle('active', on);
-  const names = (zimBookList || []).filter((b) => state.zimBooks.includes(b.id)).map((b) => b.title);
-  els.zimToggle.title = on
-    ? `Searching ${state.zimMode === 'thorough' ? '(Thorough)' : '(Quick)'}: ${names.join(', ') || state.zimBooks.join(', ')} — click to change`
-    : 'Search ZIM archives (Wikipedia, MedlinePlus…) when answering';
+  els.zimToggle.title = zimPickerOpen ? 'Close the archive list' : 'Search ZIM archives (Wikipedia, MedlinePlus…) when answering';
+  els.zimPicker.classList.toggle('hidden', !zimPickerOpen);
+  els.zimSummary.classList.toggle('hidden', zimPickerOpen || !on);
+  if (on) {
+    const names = state.zimBooks.map((id) => zimTitles[id] || id);
+    els.zimSummaryText.textContent = `🗃️ Searching (${state.zimMode === 'thorough' ? 'Thorough' : 'Quick'}): ${names.join(', ')}`;
+  }
+  refreshModelLoadState(); // ticking archives changes the context size the model needs
 }
 
 async function loadZimBooks() {
   if (zimBookList) return zimBookList;
   els.zimPickerList.textContent = 'Starting the archive search…';
-  const { books, last } = await window.localAI.zimListSearchable();
+  const { books } = await window.localAI.zimListSearchable();
   zimBookList = books;
-  zimLastUsed = last;
+  for (const b of books) zimTitles[b.id] = b.title;
   // Ticks for archives that no longer exist (deleted, drive not plugged in) are dropped.
   state.zimBooks = state.zimBooks.filter((id) => books.some((b) => b.id === id));
   return books;
@@ -956,20 +978,25 @@ function renderZimPicker() {
 }
 
 function saveZimSettings() {
-  zimLastUsed = { books: state.zimBooks, mode: state.zimMode };
-  window.localAI.zimSaveSettings({ chatId: state.chatId, books: state.zimBooks, mode: state.zimMode });
+  const titles = Object.fromEntries(state.zimBooks.map((id) => [id, zimTitles[id] || id]));
+  window.localAI.zimSaveSettings({ chatId: state.chatId, books: state.zimBooks, mode: state.zimMode, titles });
 }
 
-els.zimToggle.addEventListener('click', async () => {
-  if (!els.zimPicker.classList.contains('hidden')) {
-    els.zimPicker.classList.add('hidden');
-    saveZimSettings();
-    return;
-  }
-  els.zimPicker.classList.remove('hidden');
+async function openZimPicker() {
+  zimPickerOpen = true;
+  updateZimToggle();
   await loadZimBooks();
   renderZimPicker();
-});
+  updateZimToggle();
+}
+
+function closeZimPicker() {
+  zimPickerOpen = false;
+  updateZimToggle();
+  saveZimSettings();
+}
+
+els.zimToggle.addEventListener('click', () => (zimPickerOpen ? closeZimPicker() : openZimPicker()));
 els.zimPicker.querySelectorAll('input[name="zim-mode"]').forEach((r) => {
   r.addEventListener('change', () => { if (r.checked) { state.zimMode = r.value; updateZimToggle(); } });
 });
@@ -978,22 +1005,24 @@ els.zimPickerNone.onclick = () => {
   renderZimPicker();
   updateZimToggle();
 };
-els.zimPickerDone.onclick = () => {
-  els.zimPicker.classList.add('hidden');
+els.zimPickerDone.onclick = closeZimPicker;
+els.zimSummaryChange.onclick = openZimPicker;
+els.zimSummaryClear.onclick = () => {
+  state.zimBooks = [];
+  updateZimToggle();
   saveZimSettings();
 };
 
-// A chat's own saved choice, or the last-used one for a chat that has none
-// yet. Read from the chat list (SELECT * includes zim_settings).
+// Back to nothing ticked (new chat), or the chat's own saved choice.
+// Read from the chat list (SELECT * includes zim_settings).
 async function applyChatZimSettings(chatId) {
   const chats = await window.localAI.listChats();
   let saved = null;
   try { saved = JSON.parse(chats.find((c) => c.id === chatId)?.zim_settings || 'null'); } catch { /* ignore */ }
-  const pick = saved || zimLastUsed;
-  if (!pick) return;
-  state.zimBooks = [...(pick.books || [])];
-  state.zimMode = pick.mode === 'thorough' ? 'thorough' : 'quick';
-  if (!els.zimPicker.classList.contains('hidden') && zimBookList) renderZimPicker();
+  state.zimBooks = [...(saved?.books || [])];
+  state.zimMode = saved?.mode === 'thorough' ? 'thorough' : 'quick';
+  Object.assign(zimTitles, saved?.titles || {});
+  if (zimPickerOpen && zimBookList) renderZimPicker();
   updateZimToggle();
 }
 
@@ -1071,14 +1100,43 @@ function setModelLoadState(mode) {
   }
 }
 
-async function refreshModelLoadState() {
-  if (!state.model || state.streaming || modelLoadingByButton) return; // don't fight a 'loading' state already in progress
+// Ollama reloads a model whenever a request's num_ctx differs from the one
+// it was loaded with — even a smaller one. If the selected model is already
+// resident with at least `needed`, ask for exactly that size instead.
+async function fitResidentCtx(needed) {
+  if (state.backend !== 'ollama') return needed;
+  try {
+    const m = (await window.localAI.getRunningModels()).find((r) => r.name === state.model);
+    if (m?.context_length && m.context_length >= (needed || 0)) return m.context_length;
+  } catch { /* fall through */ }
+  return needed;
+}
+
+// 'loaded' = resident and ready for the next request; 'resize' = resident
+// but Ollama would reload it because the request needs a different context
+// size (e.g. it was loaded before ZIM archives were ticked); 'idle' = not
+// resident. LM Studio never reloads for this, so it's never 'resize' there.
+async function modelResidency() {
   try {
     const running = await window.localAI.getRunningModels();
-    setModelLoadState(running.some((m) => m.name === state.model) ? 'loaded' : 'idle');
+    const m = running.find((r) => r.name === state.model);
+    if (!m) return 'idle';
+    const want = chatNumCtx();
+    if (state.backend === 'ollama' && want && m.context_length && m.context_length < want) return 'resize';
+    return 'loaded';
   } catch {
-    setModelLoadState('idle');
+    return 'idle';
   }
+}
+
+async function refreshModelLoadState() {
+  if (!state.model || state.streaming || modelLoadingByButton) return; // don't fight a 'loading' state already in progress
+  const r = await modelResidency();
+  els.modelLoadBtn.textContent = r === 'resize' ? 'Reload model' : 'Load model';
+  els.modelLoadBtn.title = r === 'resize'
+    ? 'The model is loaded with a smaller context than ZIM/library search needs — the next question would reload it anyway. Reload it now.'
+    : 'Load the selected model into memory now, so your first question is answered faster';
+  setModelLoadState(r === 'loaded' ? 'loaded' : 'idle');
 }
 setInterval(refreshModelLoadState, 5000);
 
@@ -1098,7 +1156,9 @@ els.modelLoadBtn.onclick = async () => {
   if (!state.model || modelLoadingByButton) return;
   modelLoadingByButton = true;
   setModelLoadState('loading');
-  const numCtx = chatNumCtx();
+  // Always room for ZIM/library lookups (16K), so ticking them after loading
+  // doesn't force a reload; plain chats then reuse it too (fitResidentCtx).
+  const numCtx = Math.max(state.contextSize || 0, 16384);
   const res = await window.localAI.loadChatModel({ model: state.model, options: numCtx ? { num_ctx: numCtx } : undefined, zim: state.zimBooks.length > 0 });
   modelLoadingByButton = false;
   if (!res.success) {
@@ -3652,11 +3712,5 @@ els.composer.addEventListener('drop', async (e) => {
   setStatus(ready, backend);
   await refreshChatList();
   state.contextSize = await window.localAI.getContextSize(); // so a chat sent before the Models tab is ever opened still honors it
-  // Last-used ZIM choice for the first (new) chat — without starting the
-  // search server; that happens on the first search or picker open.
-  zimLastUsed = await window.localAI.zimGetLast();
-  state.zimBooks = [...zimLastUsed.books];
-  state.zimMode = zimLastUsed.mode;
-  updateZimToggle();
   checkResearchNotice();
 })();
