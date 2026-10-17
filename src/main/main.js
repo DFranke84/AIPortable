@@ -10,6 +10,7 @@ const { OllamaManager, HOST: OLLAMA_HOST, PORT: OLLAMA_PORT } = require('./servi
 const { LMStudioManager } = require('./services/lmstudio');
 const { KiwixManager } = require('./services/kiwix');
 const { ZimSearch } = require('./services/zimSearch');
+const { MapDownloader, readCatalog: readMapsCatalog, findPmtiles } = require('./services/mapDownloader');
 const { ZimDownloader, readCatalog: readWikipediaCatalog } = require('./services/zimDownloader');
 const { ModelDownloader, TIERS: CATALOG_TIERS } = require('./services/modelCatalog');
 const { MobileServer } = require('./services/mobileServer');
@@ -268,6 +269,7 @@ async function runtimeReady() {
 const kiwix = new KiwixManager();
 const zimSearch = new ZimSearch(); // a second kiwix-serve the chat searches — see services/zimSearch.js
 const zimDownloader = new ZimDownloader();
+const mapDownloader = new MapDownloader();
 
 // Whether *this app* launched the Ollama process currently serving requests.
 // Only true when we spawned it ourselves (with OLLAMA_MODELS pointed at the
@@ -495,6 +497,7 @@ let exitKeepModelsLoaded = false;
 // explicit Exit action and the normal window-close/quit path. Skips tearing
 // down Ollama/models entirely when the user opted to leave them loaded.
 async function performShutdown(keepModelsLoaded) {
+  mapDownloader.cancelAll(); // a half-finished region is just a .part file, removed on the next try
   if (keepModelsLoaded) {
     win?.webContents.send('shutdown-status', { message: 'Closing…' });
     // Remember which PID we left running so the next launch can re-adopt it
@@ -575,6 +578,19 @@ function getSavedWindowBounds() {
   return onScreen ? saved : { width: saved.width, height: saved.height };
 }
 
+// Saved whenever the window is resized/moved (debounced) and again right
+// before shutdown — not only from the window's 'close' event: quitting ends
+// with app.exit() (see before-quit), which never fires 'close', so the size
+// was never actually saved on a normal Exit.
+// getNormalBounds() (not getBounds()) so a maximized window still remembers
+// its restored size/position, not the maximized ones.
+function saveWindowState() {
+  if (!win || win.isDestroyed() || win.isMinimized()) return;
+  hostSettings.windowMaximized = win.isMaximized();
+  hostSettings.windowBounds = win.getNormalBounds();
+  saveHostSettings();
+}
+
 function createWindow() {
   const saved = getSavedWindowBounds();
   win = new BrowserWindow({
@@ -619,12 +635,11 @@ function createWindow() {
       win.webContents.send('close-requested');
       return;
     }
-    // getNormalBounds() (not getBounds()) so a currently-maximized window
-    // still remembers its restored size/position, not the maximized ones.
-    hostSettings.windowMaximized = win.isMaximized();
-    hostSettings.windowBounds = win.getNormalBounds();
-    saveHostSettings();
+    saveWindowState();
   });
+  let windowStateTimer = null;
+  const saveSoon = () => { clearTimeout(windowStateTimer); windowStateTimer = setTimeout(saveWindowState, 500); };
+  for (const ev of ['resize', 'move', 'maximize', 'unmaximize']) win.on(ev, saveSoon);
   win.on('closed', () => { win = null; });
 }
 
@@ -872,6 +887,9 @@ app.whenReady().then(async () => {
   zimDownloader.on('progress', (data) => win?.webContents.send('wikipedia-pull-progress', data));
   zimDownloader.on('complete', (data) => win?.webContents.send('wikipedia-pull-complete', data));
   zimDownloader.on('error', (data) => win?.webContents.send('wikipedia-pull-error', data));
+  mapDownloader.on('progress', (data) => win?.webContents.send('maps-download-progress', data));
+  mapDownloader.on('complete', (data) => win?.webContents.send('maps-download-complete', data));
+  mapDownloader.on('error', (data) => win?.webContents.send('maps-download-error', data));
 
   createWindow();
   await ensureOllamaRunning();
@@ -893,6 +911,7 @@ app.on('before-quit', (e) => {
   if (shuttingDown) return;
   e.preventDefault();
   shuttingDown = true;
+  saveWindowState();
   // app.exit() (hard, immediate process termination), not app.quit() (which
   // waits for Node's event loop to drain on its own). When the user chose to
   // leave models loaded, performShutdown() deliberately leaves ollamaProcess
@@ -1240,6 +1259,27 @@ ipcMain.handle('maps:import', async () => {
   fs.copyFileSync(src, dest);
   return { success: true, name: path.basename(dest) };
 });
+
+// -- catalog of downloadable regions (data/maps-catalog.json) --
+const mapsCatalogPath = path.join(dataDir, 'maps-catalog.json');
+
+ipcMain.handle('maps:get-catalog', () => {
+  const { catalog, error } = readMapsCatalog(mapsCatalogPath);
+  const have = fs.existsSync(mapsDir) ? new Set(fs.readdirSync(mapsDir).map((f) => f.toLowerCase())) : new Set();
+  for (const [key, r] of Object.entries(catalog.regions)) r.downloaded = have.has(`${key}.pmtiles`.toLowerCase());
+  return { catalog, error, path: mapsCatalogPath, status: mapDownloader.getStatus(), toolReady: !!findPmtiles(getResourcesDir()) };
+});
+
+ipcMain.handle('maps:download', async (e, key) => {
+  const { catalog } = readMapsCatalog(mapsCatalogPath);
+  const entry = catalog.regions[key];
+  if (!entry) return { success: false, error: 'Unknown map region.' };
+  const exe = findPmtiles(getResourcesDir());
+  if (!exe) return { success: false, error: 'The map download tool (pmtiles) is missing — run Setup-Windows.bat again.' };
+  return mapDownloader.download(key, entry, mapsDir, exe, catalog.source);
+});
+
+ipcMain.handle('maps:cancel-download', (e, key) => ({ success: mapDownloader.cancel(key) }));
 
 ipcMain.handle('maps:remove', (e, name) => {
   const p = path.join(mapsDir, path.basename(name));

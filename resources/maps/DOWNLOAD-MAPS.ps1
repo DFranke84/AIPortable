@@ -1,149 +1,116 @@
-﻿<#
-  DOWNLOAD-MAPS.ps1 -- (re)download/extract the offline map (.pmtiles) files
-  this copy of the app already has in data\maps\, or add new ones.
+<#
+  DOWNLOAD-MAPS.ps1 - download offline map regions into data\maps\.
 
-  The app ships with NO map tiles by design (they're multi-GB per region).
-  This script is idempotent -- it skips any region whose file already exists
-  in data\maps\ -- so it doubles as both the original download script and a
-  safe "refresh/re-verify everything" tool you can re-run any time.
+  The regions offered come from data\maps-catalog.json - the same list as the
+  app's Tools -> Maps -> Download maps. Add your own region there (a name and
+  a bounding box from https://boundingbox.klokantech.com/).
 
-  A portable copy of the pmtiles CLI (go-pmtiles v1.31.2, Windows x86_64) is
-  already bundled in this folder as a zip:
+  Each region is cut out of Protomaps' daily world build with the pmtiles
+  tool: only the tiles inside the region are fetched, never the whole planet.
+  Regions already in data\maps\ are skipped, so this is safe to re-run.
 
-      resources\maps\tools\go-pmtiles_1.31.2_Windows_x86_64.zip
-
-  ---------------------------------------------------------------------------
-  ONE-TIME SETUP -- extract the pmtiles CLI so the commands below can find it
-  ---------------------------------------------------------------------------
-  You need pmtiles.exe sitting at:
-
-      resources\maps\tools\pmtiles.exe
-
-  To get it there:
-    1. Open resources\maps\tools\ in File Explorer.
-    2. Right-click go-pmtiles_1.31.2_Windows_x86_64.zip -> "Extract All..."
-       (or double-click it if you have 7-Zip/similar installed).
-    3. The zip contains pmtiles.exe, LICENSE, and README.md at its top level
-       -- extract them directly into resources\maps\tools\ (not into a new
-       subfolder), so you end up with resources\maps\tools\pmtiles.exe.
-    4. You can delete the extracted LICENSE/README.md if you like, or leave
-       them -- only pmtiles.exe is actually used.
-
-  This script also does that extraction for you automatically the first
-  time it's run (see the "auto-extract" block below) -- the manual steps
-  above are just there in case you'd rather do it by hand, or the
-  auto-extract step fails for some reason (e.g. Windows blocking a file
-  downloaded from the internet -- right-click the zip -> Properties ->
-  "Unblock" if so).
-
-  ---------------------------------------------------------------------------
-  Two ways to get a .pmtiles file for a region
-  ---------------------------------------------------------------------------
-
-  OPTION A -- download a pre-built extract (easiest, no CLI needed)
-    1. Go to https://protomaps.com/downloads
-    2. Pick a city/state/country/continent -- sizes range from tens of MB
-       (a city) to a few GB (a continent).
-    3. Save the downloaded .pmtiles file into ..\..\data\maps\ (all maps --
-       the ones you download yourself and the ones that came with this
-       copy of the app -- live there; the app's Maps tab -> "Import local
-       .pmtiles..." does the same copy for you if you'd rather use the UI).
-
-  OPTION B -- extract a custom bounding box yourself with the bundled CLI
-    Once resources\maps\tools\pmtiles.exe exists (see setup above), extract
-    just the area you want from Protomaps' daily global build straight into
-    data\maps\ (this is byte-range extraction over HTTP -- it does NOT
-    download the full ~120GB planet file first):
-
-        .\tools\pmtiles.exe extract https://build.protomaps.com/<date>.pmtiles ..\..\data\maps\<output>.pmtiles --bbox=<minLon>,<minLat>,<maxLon>,<maxLat>
-
-    Find <date> (a build snapshot, e.g. 20260911) at
-    https://maps.protomaps.com/builds/ -- Protomaps only keeps roughly the
-    last week of daily builds online, so an old date will eventually 404;
-    $BuildDate below defaults to today and falls back automatically.
-    Find a bounding box for your own custom area at
-    https://boundingbox.klokantech.com/
-
-  ---------------------------------------------------------------------------
-  YOUR COMMANDS -- one block per region below. Each is idempotent (skips if
-  the file already exists) and uses the shared $BuildDate. Add your own
-  region by copying a block and giving it a new bbox.
-  ---------------------------------------------------------------------------
+  Usage:
+    Right-click -> Run with PowerShell     (shows the list, you pick)
+    DOWNLOAD-MAPS.ps1 -Regions montana,world
+    DOWNLOAD-MAPS.ps1 -PickOnly            (just asks; prints the chosen keys -
+                                            used by the setup script)
 #>
+param(
+  [string[]]$Regions = @(),
+  [switch]$PickOnly
+)
 
-# --- auto-extract: unpacks the bundled pmtiles CLI zip on first run -------
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+$root     = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $toolsDir = Join-Path $PSScriptRoot 'tools'
 $exePath  = Join-Path $toolsDir 'pmtiles.exe'
-$zipPath  = Join-Path $toolsDir 'go-pmtiles_1.31.2_Windows_x86_64.zip'
+$mapsDir  = Join-Path $root 'data\maps'
+$catalogPath = Join-Path $root 'data\maps-catalog.json'
+$PmtilesVersion = '1.31.2'
 
+if (-not (Test-Path $catalogPath)) { Write-Host "Map catalog not found: $catalogPath" -ForegroundColor Red; exit 1 }
+$catalog = Get-Content $catalogPath -Raw | ConvertFrom-Json
+
+# Regions in catalog order, grouped by the catalog's group weights.
+$weights = @{}
+if ($catalog.groups) { $catalog.groups.PSObject.Properties | ForEach-Object { $weights[$_.Name] = [int]$_.Value } }
+$i = 0
+$all = @($catalog.regions.PSObject.Properties | ForEach-Object {
+  $g = if ($_.Value.group) { $_.Value.group } else { 'Other' }
+  $w = if ($weights.ContainsKey($g)) { $weights[$g] } else { 99 }
+  [pscustomobject]@{ Key = $_.Name; Name = $_.Value.name; Group = $g; Size = $_.Value.size; Bbox = $_.Value.bbox; MaxZoom = $_.Value.maxzoom; W = $w; Order = $i++ }
+} | Sort-Object W, Order)
+
+function Show-Menu {
+  Write-Host ""
+  Write-Host "    Offline maps - pick the regions to download (they're saved in data\maps):"
+  $lastGroup = ''
+  for ($n = 0; $n -lt $all.Count; $n++) {
+    $r = $all[$n]
+    if ($r.Group -ne $lastGroup) { Write-Host ""; Write-Host "    $($r.Group)" -ForegroundColor Cyan; $lastGroup = $r.Group }
+    $have = if (Test-Path (Join-Path $mapsDir "$($r.Key).pmtiles")) { '  (already downloaded)' } else { '' }
+    Write-Host ("    {0,2}) {1,-48} {2,8}{3}" -f ($n + 1), $r.Name, $r.Size, $have)
+  }
+  Write-Host ""
+  $answer = Read-Host "    Type the number(s) of the regions you want (e.g. 2 or 1,15), or press Enter to skip maps"
+  $picked = @()
+  foreach ($tok in ($answer -split '[,\s]+' | Where-Object { $_ })) {
+    $n = 0
+    if ([int]::TryParse($tok, [ref]$n) -and $n -ge 1 -and $n -le $all.Count) { $picked += $all[$n - 1].Key }
+    else { Write-Host "    Ignored '$tok' - not a number from the list." -ForegroundColor Yellow }
+  }
+  return $picked
+}
+
+if ($PickOnly) { return (Show-Menu) }
+if (-not $Regions.Count) { $Regions = @(Show-Menu) }
+if (-not $Regions.Count) { Write-Host "    No map regions picked."; return }
+
+# --- the pmtiles tool: bundled zip first, else download it ------------------
 if (-not (Test-Path $exePath)) {
-  if (Test-Path $zipPath) {
-    Write-Host "Extracting pmtiles CLI from $zipPath ..."
-    Expand-Archive -Path $zipPath -DestinationPath $toolsDir -Force
-    if (Test-Path $exePath) {
-      Write-Host "Ready: $exePath"
-    } else {
-      Write-Warning "Extraction finished but pmtiles.exe wasn't found in $toolsDir - check the zip contents."
-    }
-  } else {
-    Write-Warning "Neither pmtiles.exe nor the bundled zip were found in $toolsDir."
-    Write-Warning "Download go-pmtiles for Windows from https://github.com/protomaps/go-pmtiles/releases and place pmtiles.exe there."
+  New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+  $zip = Get-ChildItem -Path $toolsDir -Filter 'go-pmtiles_*_Windows_x86_64.zip' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $zip) {
+    $url = "https://github.com/protomaps/go-pmtiles/releases/download/v$PmtilesVersion/go-pmtiles_${PmtilesVersion}_Windows_x86_64.zip"
+    Write-Host "    Downloading the pmtiles map tool: $url"
+    $zipPath = Join-Path $toolsDir "go-pmtiles_${PmtilesVersion}_Windows_x86_64.zip"
+    Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+    $zip = Get-Item $zipPath
   }
+  Expand-Archive -Path $zip.FullName -DestinationPath $toolsDir -Force
+  if (-not (Test-Path $exePath)) { Write-Host "    pmtiles.exe wasn't found after unpacking $($zip.Name)." -ForegroundColor Red; exit 1 }
 }
-# ---------------------------------------------------------------------------
 
-$mapsDir = Join-Path $PSScriptRoot '..\..\data\maps'
+# --- download ----------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $mapsDir | Out-Null
+$source = if ($catalog.source) { $catalog.source } else { 'https://build.protomaps.com/{date}.pmtiles' }
+# Today's build can lag a few hours behind; Protomaps keeps about a week online.
+$dates = 0..2 | ForEach-Object { (Get-Date).ToUniversalTime().AddDays(-$_).ToString('yyyyMMdd') }
 
-# Which planet snapshot to extract from. Defaults to today; if that day's
-# build isn't published yet (Protomaps' daily build can lag a few hours),
-# each Invoke-Extract call below falls back to yesterday automatically.
-$BuildDate = Get-Date -Format 'yyyyMMdd'
-
-function Invoke-Extract {
-  param(
-    [string]$Name,
-    [string]$Bbox,
-    [string]$ExtraArgs = ''
-  )
-  $dest = Join-Path $mapsDir "$Name.pmtiles"
-  if (Test-Path $dest) {
-    Write-Host "[skip] $Name.pmtiles already exists in data\maps\"
-    return
-  }
-  $dates = @($BuildDate, (Get-Date).AddDays(-1).ToString('yyyyMMdd'))
+$failed = 0
+foreach ($key in $Regions) {
+  $r = $all | Where-Object { $_.Key -eq $key } | Select-Object -First 1
+  if (-not $r) { Write-Host "    Unknown region '$key' - not in the map catalog." -ForegroundColor Yellow; $failed++; continue }
+  $dest = Join-Path $mapsDir "$key.pmtiles"
+  if (Test-Path $dest) { Write-Host "    [skip] $($r.Name) - already in data\maps"; continue }
+  $part = "$dest.part"
+  $done = $false
   foreach ($d in $dates) {
-    $source = "https://build.protomaps.com/$d.pmtiles"
-    Write-Host "[extract] $Name.pmtiles  (build $d, bbox=$Bbox)"
-    $argList = @('extract', $source, $dest, "--bbox=$Bbox")
-    if ($ExtraArgs) { $argList += $ExtraArgs.Split(' ') }
+    Remove-Item $part -Force -ErrorAction SilentlyContinue
+    Write-Host ""
+    Write-Host "    Downloading $($r.Name) ($($r.Size), map build $d)..." -ForegroundColor Cyan
+    $argList = @('extract', $source.Replace('{date}', $d), $part)
+    if ($r.Bbox) { $argList += "--bbox=$($r.Bbox)" }
+    if ($null -ne $r.MaxZoom) { $argList += "--maxzoom=$($r.MaxZoom)" }
     & $exePath @argList
-    if (Test-Path $dest) { return }
-    Write-Warning "Build $d didn't work for $Name -- trying an older date."
+    if ($LASTEXITCODE -eq 0 -and (Test-Path $part)) { Move-Item $part $dest -Force; $done = $true; break }
+    Write-Host "    That build didn't work - trying the day before." -ForegroundColor Yellow
   }
-  Write-Warning "Could not extract $Name.pmtiles -- check the date range at https://maps.protomaps.com/builds/ and re-run with a manually-set `$BuildDate."
+  Remove-Item $part -Force -ErrorAction SilentlyContinue
+  if ($done) { Write-Host "    OK: $($r.Name) saved as data\maps\$key.pmtiles" -ForegroundColor Green }
+  else { Write-Host "    Could not download $($r.Name) - try again later, or from Tools -> Maps in the app." -ForegroundColor Red; $failed++ }
 }
-
-Invoke-Extract -Name 'usa'            -Bbox '-125,24,-66,50'                                  -ExtraArgs '--maxzoom=15'
-Invoke-Extract -Name 'alaska'         -Bbox '-169.365234,53.067627,-138.251953,71.965388'
-Invoke-Extract -Name 'canada-west'    -Bbox '-140.800781,48.341646,-100.195313,70.050596'
-Invoke-Extract -Name 'japan'          -Bbox '125.793457,30.183122,148.842773,45.996962'
-Invoke-Extract -Name 'nordics'        -Bbox '4,57.5,31.5,71.5'
-Invoke-Extract -Name 'iceland'        -Bbox '-25.334473,62.935235,-12.304688,66.835165'
-Invoke-Extract -Name 'western-europe' -Bbox '-10,35,19,55.5'
-Invoke-Extract -Name 'uk'             -Bbox '-8.6,49.8,1.8,60.9'
-Invoke-Extract -Name 'australia'      -Bbox '112,-44,154,-9'
-# Invoke-Extract -Name 'canada-east' -Bbox '-101.953125,40.847060,-51.943359,68.431513'
-
-# world -- this one isn't a bbox extract at all: it's the whole planet at a
-# low max zoom (no --bbox = every tile up to --maxzoom, globally). --maxzoom=6
-# world.pmtiles; raise it for more detail (bigger file) or lower it for less.
-$worldDest = Join-Path $mapsDir 'world.pmtiles'
-if (Test-Path $worldDest) {
-  Write-Host '[skip] world.pmtiles already exists in data\maps\'
-} else {
-  $source = "https://build.protomaps.com/$BuildDate.pmtiles"
-  Write-Host "[extract] world.pmtiles  (build $BuildDate, whole planet, maxzoom=6)"
-  & $exePath extract $source $worldDest --maxzoom=6
-}
-
+if ($failed) { exit 1 }
