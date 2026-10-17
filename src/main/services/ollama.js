@@ -169,15 +169,17 @@ class OllamaManager {
   // something cosmetic.
   async generateTitle(model, userText) {
     try {
-      const options = await this.fitOptions(model, undefined);
+      // Capped like searchKeywords: a model ignoring think:false could
+      // otherwise think for minutes — holding up the next question behind it.
+      const options = { ...(await this.fitOptions(model, undefined)), num_predict: 200 };
       const res = await request('/api/chat', {
         method: 'POST',
         body: {
           model,
           stream: false,
           think: false, // a thinking model otherwise reasons at length over a 3-6 word title
-          keep_alive: -1,
-          ...(options ? { options } : {}), // don't let this reset the model's idle timer to the 5-minute default — see chatStream
+          keep_alive: -1, // don't let this reset the model's idle timer to the 5-minute default — see chatStream
+          options,
           messages: [
             {
               role: 'system',
@@ -245,12 +247,15 @@ class OllamaManager {
   // follows, for the same reload reason as identifyImage.
   async searchKeywords(model, messages, options) {
     try {
-      options = await this.fitOptions(model, options);
+      // num_predict caps the reply (hidden thinking included) so this stays a
+      // few seconds: some models ignore think:false — qwen3-vl:8b thought for
+      // 2 min over four search words (measured 2026-10-17). Cut off before
+      // writing any, the reply is empty and the caller searches the question.
+      // num_predict is per-request; it doesn't make Ollama reload the model.
+      options = { ...(await this.fitOptions(model, options)), num_predict: 300 };
       const res = await request('/api/chat', {
         method: 'POST',
-        // think: false — a thinking model otherwise reasons for a minute or more
-        // before writing four words (qwen3.5: 90-125 s vs a few seconds).
-        body: { model, stream: false, think: false, keep_alive: -1, ...(options ? { options } : {}), messages },
+        body: { model, stream: false, think: false, keep_alive: -1, options, messages },
       });
       return res?.message?.content?.trim() || null;
     } catch {
