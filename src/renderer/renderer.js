@@ -1365,15 +1365,18 @@ async function refreshWikipediaSourceSelect(activeZimPath) {
     }
     els.wikipediaSource.appendChild(og);
   }
-  // An archive imported from elsewhere (Import .zim…) isn't in any folder —
-  // still show it as the current one.
+  // An archive opened with "Import .zim…" from outside these folders gets its
+  // own group while it's showing, as a normal option.
   if (activeZimPath && !found) {
+    const og = document.createElement('optgroup');
+    og.label = 'Opened from elsewhere';
     const opt = document.createElement('option');
     opt.value = activeZimPath;
     opt.textContent = activeZimPath.split(/[\\/]/).pop();
-    opt.disabled = true;
+    opt.title = activeZimPath;
     opt.selected = true;
-    els.wikipediaSource.appendChild(opt);
+    og.appendChild(opt);
+    els.wikipediaSource.appendChild(og);
   }
   if (!activeZimPath) els.wikipediaSource.value = '';
 }
@@ -1429,8 +1432,13 @@ async function syncWikipediaBrowserView() {
 
 new ResizeObserver(() => syncWikipediaBrowserView()).observe(els.wikipediaWebviewWrap);
 
+// Opens blank on "Select a wiki to view…" — the last archive is not
+// reloaded automatically (that loaded a file that had since been moved, and
+// showed it selected but blank). An archive is shown only once something
+// has started it: picking one in the list, "Import .zim…", or a chat source
+// link (each starts the viewer's kiwix-serve itself).
 async function refreshWikipediaViewer() {
-  const status = await window.localAI.wikipediaStatus();
+  const status = await window.localAI.wikipediaStatus({ autostart: false });
   if (!status.available) {
     els.wikipediaSourceRow.classList.add('hidden');
     els.wikipediaImport.disabled = true;
@@ -1442,8 +1450,9 @@ async function refreshWikipediaViewer() {
     await syncWikipediaBrowserView();
     return;
   }
-  await refreshWikipediaSourceSelect(status.zimPath);
-  if (!status.hasZim) {
+  const showing = status.ready && status.hasZim ? status.zimPath : null;
+  await refreshWikipediaSourceSelect(showing);
+  if (!showing) {
     // Deliberately not auto-loading anything here, even if files are sitting
     // downloaded and ready — the dropdown starts on its own blank
     // placeholder (see refreshWikipediaSourceSelect) and stays there until
@@ -1460,17 +1469,11 @@ async function refreshWikipediaViewer() {
     return;
   }
   els.wikipediaEmpty.classList.add('hidden');
-  if (status.ready) {
-    els.wikipediaStatus.textContent = status.zimPath;
-    els.wikipediaWebviewWrap.classList.remove('hidden');
-    wikipediaViewerUrl = pendingWikipediaArticleUrl || status.viewerUrl;
-    pendingWikipediaArticleUrl = null;
-    wikipediaViewerReady = true;
-  } else {
-    els.wikipediaStatus.textContent = `Starting… (${status.zimPath})`;
-    els.wikipediaWebviewWrap.classList.add('hidden');
-    wikipediaViewerReady = false;
-  }
+  els.wikipediaStatus.textContent = status.zimPath;
+  els.wikipediaWebviewWrap.classList.remove('hidden');
+  wikipediaViewerUrl = pendingWikipediaArticleUrl || status.viewerUrl;
+  pendingWikipediaArticleUrl = null;
+  wikipediaViewerReady = true;
   await syncWikipediaBrowserView();
 }
 
