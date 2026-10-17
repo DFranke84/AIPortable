@@ -138,6 +138,8 @@ contextBridge.exposeInMainWorld('localAI', {
   wikipediaSetActive: (name) => ipcRenderer.invoke('wikipedia:set-active', name),
   wikipediaRemove: (name) => ipcRenderer.invoke('wikipedia:remove', name),
   wikipediaOpenArticle: (payload) => ipcRenderer.invoke('wikipedia:open-article', payload),
+  wikipediaListAll: () => ipcRenderer.invoke('wikipedia:list-all'),
+  wikipediaOpenFile: (filePath) => ipcRenderer.invoke('wikipedia:open-file', filePath),
   // -- ZIM search in chat (services/zimSearch.js) --
   zimListSearchable: () => ipcRenderer.invoke('zim:list-searchable'),
   zimGetFolders: () => ipcRenderer.invoke('zim:get-folders'),

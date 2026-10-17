@@ -1325,14 +1325,23 @@ els.toolsOverlay.addEventListener('click', (e) => { if (e.target === els.toolsOv
 // folder (Tools → Wikipedia manages that list) and, when one matches, selects
 // it — so switching which archive you're browsing doesn't require a trip to
 // Tools at all. Hidden entirely when there's nothing to choose from.
+// Every archive in every ZIM archive folder (Tools → Library), grouped by
+// folder, named from the Wikipedia catalog where it knows the file
+// ("MedlinePlus (2025-01)") and by file name otherwise.
 async function refreshWikipediaSourceSelect(activeZimPath) {
-  const files = await window.localAI.wikipediaList();
-  if (files.length === 0) {
+  const [groups, { catalog }] = await Promise.all([window.localAI.wikipediaListAll(), window.localAI.wikipediaGetCatalog()]);
+  if (groups.length === 0) {
     els.wikipediaSourceRow.classList.add('hidden');
     return;
   }
   els.wikipediaSourceRow.classList.remove('hidden');
-  const activeName = activeZimPath ? activeZimPath.split(/[\\/]/).pop() : null;
+  const stem = (n) => n.replace(/\.zim$/i, '').replace(/_\d{4}-\d{2}[a-z]?$/, '');
+  const names = new Map(Object.entries(catalog?.zims || {}).map(([k, v]) => [stem(k), v.name]));
+  const label = (f) => {
+    const date = /_(\d{4}-\d{2})[a-z]?\.zim$/i.exec(f.name)?.[1];
+    const known = names.get(stem(f.name));
+    return known ? `${known}${date ? ` (${date})` : ''}` : f.name;
+  };
   els.wikipediaSource.innerHTML = '';
   // A blank placeholder rather than defaulting to whichever file happens to
   // list first — nothing should load just because the dropdown needed some
@@ -1341,28 +1350,39 @@ async function refreshWikipediaSourceSelect(activeZimPath) {
   placeholder.value = '';
   placeholder.textContent = 'Select a wiki to view…';
   els.wikipediaSource.appendChild(placeholder);
-  for (const f of files) {
-    const opt = document.createElement('option');
-    opt.value = f.name;
-    opt.textContent = f.name;
-    els.wikipediaSource.appendChild(opt);
+  const active = (activeZimPath || '').toLowerCase();
+  let found = false;
+  for (const g of groups) {
+    const og = document.createElement('optgroup');
+    og.label = `${g.label} — ${g.folder}`;
+    for (const f of [...g.files].sort((a, b) => label(a).localeCompare(label(b)))) {
+      const opt = document.createElement('option');
+      opt.value = f.path;
+      opt.textContent = label(f);
+      opt.title = f.path;
+      if (f.path.toLowerCase() === active) { opt.selected = true; found = true; }
+      og.appendChild(opt);
+    }
+    els.wikipediaSource.appendChild(og);
   }
-  // An archive opened from a chat source can live outside the download
-  // folder (e.g. Research\_sources\zim) — still show it as the current one.
-  if (activeName && !files.some((f) => f.name === activeName)) {
+  // An archive imported from elsewhere (Import .zim…) isn't in any folder —
+  // still show it as the current one.
+  if (activeZimPath && !found) {
     const opt = document.createElement('option');
-    opt.value = activeName;
-    opt.textContent = activeName;
+    opt.value = activeZimPath;
+    opt.textContent = activeZimPath.split(/[\\/]/).pop();
     opt.disabled = true;
+    opt.selected = true;
     els.wikipediaSource.appendChild(opt);
   }
-  els.wikipediaSource.value = activeName && [...els.wikipediaSource.options].some((o) => o.value === activeName) ? activeName : '';
+  if (!activeZimPath) els.wikipediaSource.value = '';
 }
 
 els.wikipediaSource.addEventListener('change', async () => {
-  const name = els.wikipediaSource.value;
-  if (!name) return;
-  await window.localAI.wikipediaSetActive(name);
+  const filePath = els.wikipediaSource.value;
+  if (!filePath) return;
+  const res = await window.localAI.wikipediaOpenFile(filePath);
+  if (!res.success) await showAppAlert(`Couldn't open that archive: ${res.error}`);
   await refreshWikipediaViewer();
 });
 
@@ -1428,7 +1448,7 @@ async function refreshWikipediaViewer() {
     // downloaded and ready — the dropdown starts on its own blank
     // placeholder (see refreshWikipediaSourceSelect) and stays there until
     // you actually pick one.
-    const files = await window.localAI.wikipediaList();
+    const files = (await window.localAI.wikipediaListAll()).flatMap((g) => g.files);
     els.wikipediaStatus.textContent = '';
     els.wikipediaEmpty.textContent = files.length > 0
       ? 'Select a wiki above to start reading.'
