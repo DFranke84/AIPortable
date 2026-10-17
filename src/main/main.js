@@ -9,6 +9,7 @@ const { initDb, getDb } = require('./db');
 const { OllamaManager, HOST: OLLAMA_HOST, PORT: OLLAMA_PORT } = require('./services/ollama');
 const { LMStudioManager } = require('./services/lmstudio');
 const { KiwixManager } = require('./services/kiwix');
+const { ZimSearch } = require('./services/zimSearch');
 const { ZimDownloader, readCatalog: readWikipediaCatalog } = require('./services/zimDownloader');
 const { ModelDownloader, TIERS: CATALOG_TIERS } = require('./services/modelCatalog');
 const { MobileServer } = require('./services/mobileServer');
@@ -265,6 +266,7 @@ async function runtimeReady() {
   return ollamaReady();
 }
 const kiwix = new KiwixManager();
+const zimSearch = new ZimSearch(); // a second kiwix-serve the chat searches — see services/zimSearch.js
 const zimDownloader = new ZimDownloader();
 
 // Whether *this app* launched the Ollama process currently serving requests.
@@ -504,6 +506,7 @@ async function performShutdown(keepModelsLoaded) {
     mobileServer?.stop();
     voiceInput?.stopServer();
     await kiwix.stop(); // holds no model state worth keeping resident, unlike Ollama — always tear it down
+    await zimSearch.stop();
     try { getDb()?.close(); } catch { /* already closed */ }
     return;
   }
@@ -518,6 +521,7 @@ async function performShutdown(keepModelsLoaded) {
   voiceInput?.stopServer();
   await stopOllama();
   await kiwix.stop();
+  await zimSearch.stop();
   await killStragglers();
   try { getDb()?.close(); } catch { /* already closed */ }
 }
@@ -956,6 +960,7 @@ ipcMain.handle('chat:save-assistant-message', (e, { chatId, content }) => {
 
 // Both runtimes, since a utility stream may be on the other one (see visionBackend).
 ipcMain.handle('chat:abort', () => {
+  zimSearch.cancel();
   const a = ollama.abortGeneration();
   const b = lmstudio.abortGeneration();
   return a || b;
@@ -1458,8 +1463,82 @@ ipcMain.handle('wikipedia:remove', async (e, name) => {
     delete hostSettings.zimPath;
     saveHostSettings();
   }
+  // The chat's search server holds every .zim open as well; it restarts
+  // on the next search without this file.
+  await zimSearch.stop();
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   return { success: true };
+});
+
+// Opens one article from a chat's ZIM sources in the Wikipedia viewer —
+// switches the viewer to that article's .zim first (remembered like any
+// other import), then returns the viewer's deep link to the article.
+ipcMain.handle('wikipedia:open-article', async (e, { file, url }) => {
+  if (!file || !fs.existsSync(file) || !/^\/content\//.test(url || '')) return { success: false };
+  hostSettings.zimPath = file;
+  saveHostSettings();
+  const ready = await kiwix.ensureRunning(file, getResourcesDir());
+  if (!ready) return { success: false };
+  const base = await kiwix.getViewerUrl(); // http://127.0.0.1:8098/viewer#<book>/
+  const viewer = base.includes('/viewer#') ? base.split('#')[0] : `${base}viewer`;
+  return { success: true, viewerUrl: `${viewer}#${url.replace(/^\/content\//, '')}` };
+});
+
+// ---------------------------------------------------------------------------
+// IPC — ZIM search for chat (services/zimSearch.js)
+//
+// Every .zim in the Wikipedia download folder, the Research library's
+// _sources\zim folder, and the folder of the viewer's current file is
+// searchable. The ticked set and Quick/Thorough mode are remembered per
+// machine (last used) and per chat (chats.zim_settings).
+// ---------------------------------------------------------------------------
+function zimSearchFolders() {
+  const research = getResearchRoot();
+  return [
+    getEffectiveWikipediaDir(),
+    research && path.join(research, '_sources', 'zim'),
+    hostSettings.zimPath && path.dirname(hostSettings.zimPath),
+  ].filter(Boolean);
+}
+
+async function ensureZimSearch() {
+  const bin = kiwix.findBundled(getResourcesDir());
+  return zimSearch.ensureRunning(ZimSearch.scanFolders(zimSearchFolders()), bin);
+}
+
+ipcMain.handle('zim:list-searchable', async () => {
+  const ok = await ensureZimSearch();
+  const books = ok ? await zimSearch.listBooks() : [];
+  return {
+    books: books.map(({ id, title, ftindex, articles }) => ({ id, title, ftindex, articles })).sort((a, b) => a.title.localeCompare(b.title)),
+    last: { books: hostSettings.zimSearchBooks || [], mode: hostSettings.zimSearchMode === 'thorough' ? 'thorough' : 'quick' },
+  };
+});
+
+// The last-used choice alone, without starting the search server.
+ipcMain.handle('zim:get-last', () => ({ books: hostSettings.zimSearchBooks || [], mode: hostSettings.zimSearchMode === 'thorough' ? 'thorough' : 'quick' }));
+
+ipcMain.handle('zim:save-settings', (e, { chatId, books, mode }) => {
+  const settings = { books: Array.isArray(books) ? books : [], mode: mode === 'thorough' ? 'thorough' : 'quick' };
+  hostSettings.zimSearchBooks = settings.books;
+  hostSettings.zimSearchMode = settings.mode;
+  saveHostSettings();
+  if (chatId) getDb().prepare('UPDATE chats SET zim_settings = ? WHERE id = ?').run(JSON.stringify(settings), chatId);
+  return { success: true };
+});
+
+// Thorough needs a model that can call tools; anything else quietly gets
+// Quick, and `fellBack` lets the chat say so.
+ipcMain.handle('zim:context', async (event, { model, question, previous, books, mode, options }) => {
+  if (!(await ensureZimSearch())) return { text: '', sources: [], steps: ['ZIM search unavailable'] };
+  const backend = chatBackend();
+  const args = { backend, model, question, previous, bookIds: books, options };
+  if (mode === 'thorough') {
+    const caps = await backend.getModelCapabilities(model);
+    if (caps.tools) return zimSearch.thorough({ ...args, onStep: (s) => event.sender.send('zim-step', s) });
+    return { ...(await zimSearch.quick(args)), fellBack: true };
+  }
+  return zimSearch.quick(args);
 });
 
 // ---------------------------------------------------------------------------

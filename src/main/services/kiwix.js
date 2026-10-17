@@ -74,7 +74,8 @@ class KiwixManager {
   spawnAndWait(bin, zimPath) {
     this.zimPath = zimPath;
     try {
-      this.process = spawn(bin, [`--port=${PORT}`, zimPath], {
+      // --address keeps it off the local network — only this app's viewer needs it.
+      this.process = spawn(bin, [`--address=${HOST}`, `--port=${PORT}`, zimPath], {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });

@@ -131,6 +131,13 @@ contextBridge.exposeInMainWorld('localAI', {
   wikipediaResumeDownload: (id) => ipcRenderer.invoke('wikipedia:resume-download', id),
   wikipediaSetActive: (name) => ipcRenderer.invoke('wikipedia:set-active', name),
   wikipediaRemove: (name) => ipcRenderer.invoke('wikipedia:remove', name),
+  wikipediaOpenArticle: (payload) => ipcRenderer.invoke('wikipedia:open-article', payload),
+  // -- ZIM search in chat (services/zimSearch.js) --
+  zimListSearchable: () => ipcRenderer.invoke('zim:list-searchable'),
+  zimGetLast: () => ipcRenderer.invoke('zim:get-last'),
+  zimSaveSettings: (payload) => ipcRenderer.invoke('zim:save-settings', payload),
+  zimContext: (payload) => ipcRenderer.invoke('zim:context', payload),
+  onZimStep: (cb) => on('zim-step', cb),
   onWikipediaPullProgress: (cb) => on('wikipedia-pull-progress', cb),
   onWikipediaPullComplete: (cb) => on('wikipedia-pull-complete', cb),
   onWikipediaPullError: (cb) => on('wikipedia-pull-error', cb),

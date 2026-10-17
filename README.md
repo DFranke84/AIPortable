@@ -223,6 +223,29 @@ turns; it's rebuilt fresh from your current library every time you send with the
 toggle on. If nothing in your library matches well, no context gets injected and
 the model just answers normally.
 
+### ZIM archives in chat
+
+Click the 🗃️ button in the composer to pick which `.zim` archives (Wikipedia,
+MedlinePlus, StackExchange sites, …) the AI searches before answering. Archives
+are listed from the Wikipedia download folder, the Research library's
+`_sources\zim` folder, and the folder of the viewer's current file. Nothing is
+copied or embedded: `services/zimSearch.js` runs a second `kiwix-serve`
+(127.0.0.1:8099, every archive at once) and uses each archive's own full-text
+index. Archives without one are searched by article title only.
+
+- **Quick** (default, any model): the chat model turns the question into
+  "main topic | keywords", one search runs, and the best paragraphs of the top
+  4 articles are added as context.
+- **Thorough** (tool-calling models — Ollama `tools` capability, LM Studio
+  `trained_for_tool_use`): the model searches and opens articles itself via two
+  tools (`search_zims`, `open_article`), searching again with other words when
+  results are poor, for up to 4 rounds and 5 articles. The real answer is then
+  streamed from what it opened. Other models fall back to Quick.
+
+The steps taken show above the reply, and each source opens in the Wikipedia
+viewer. The choice is saved per chat (`chats.zim_settings`) and as the default
+for new chats.
+
 ### Chunking
 
 Documents are split into ~500–800 character chunks before indexing — not one

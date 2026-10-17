@@ -213,6 +213,47 @@ class OllamaManager {
     }
   }
 
+  // Short, non-streamed completion that turns a chat question into search
+  // words for the .zim archives (see zimSearch.js). Best-effort like
+  // generateTitle — null on failure, and the caller searches with the
+  // question itself instead. `options` should match the chat request that
+  // follows, for the same reload reason as identifyImage.
+  async searchKeywords(model, messages, options) {
+    try {
+      const res = await request('/api/chat', {
+        method: 'POST',
+        // think: false — a thinking model otherwise reasons for a minute or more
+        // before writing four words (qwen3.5: 90-125 s vs a few seconds).
+        body: { model, stream: false, think: false, keep_alive: -1, ...(options ? { options } : {}), messages },
+      });
+      return res?.message?.content?.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // One non-streamed turn with tools offered (Thorough ZIM search). Returns
+  // the model's reply, the tool calls it asked for in a runtime-neutral
+  // shape, and the assistant message to append before the tool results.
+  async chatTools(model, messages, tools, options) {
+    const res = await request('/api/chat', {
+      method: 'POST',
+      body: { model, messages, tools, stream: false, think: false, keep_alive: -1, ...(options ? { options } : {}) },
+    });
+    if (res?.error) throw new Error(res.error);
+    const msg = res?.message || {};
+    const toolCalls = (msg.tool_calls || []).map((c, i) => ({ id: String(i), name: c.function?.name, args: c.function?.arguments || {} }));
+    return {
+      content: msg.content || '',
+      toolCalls,
+      assistantMessage: { role: 'assistant', content: msg.content || '', ...(msg.tool_calls ? { tool_calls: msg.tool_calls } : {}) },
+    };
+  }
+
+  toolResultMessage(call, content) {
+    return { role: 'tool', tool_name: call.name, content };
+  }
+
   // Models currently resident in Ollama's memory (RAM/VRAM), per /api/ps —
   // this is the source of truth for whether a model is "loaded" right now,
   // as opposed to merely installed.
@@ -249,7 +290,7 @@ class OllamaManager {
     try {
       const res = await request('/api/show', { method: 'POST', body: { model: name } });
       if (Array.isArray(res?.capabilities)) {
-        return { vision: res.capabilities.includes('vision') };
+        return { vision: res.capabilities.includes('vision'), tools: res.capabilities.includes('tools') };
       }
       const families = [
         ...(res?.details?.families || []),

@@ -65,11 +65,27 @@
         </div>
 
         <div id="attachments-row" class="attachments-row hidden"></div>
+        <div id="zim-picker" class="zim-picker hidden">
+          <div class="zim-picker-head">
+            <span class="zim-picker-title">Search these ZIM archives when answering</span>
+            <div class="zim-mode" role="radiogroup" aria-label="Search mode">
+              <label title="One search, works with every model — fast"><input type="radio" name="zim-mode" value="quick" checked /> Quick</label>
+              <label title="The AI searches until satisfied — smarter but slower; needs a tool-calling model (Qwen, Llama 3.1+), others use Quick"><input type="radio" name="zim-mode" value="thorough" /> Thorough</label>
+            </div>
+          </div>
+          <div id="zim-picker-list" class="zim-picker-list"></div>
+          <div class="zim-picker-foot">
+            <span id="zim-picker-note" class="panel-hint"></span>
+            <button id="zim-picker-none" type="button" class="pull-btn">None</button>
+            <button id="zim-picker-done" type="button" class="pull-btn">Done</button>
+          </div>
+        </div>
         <form id="composer" class="composer">
           <button id="attach-btn" type="button" class="btn-icon" title="Attach a file (image, PDF, Word, text) — or drop one here">📁</button>
           <input id="attach-file" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,.pdf,.txt,.md,.docx,.doc" hidden />
           <button id="mic-btn" type="button" class="btn-icon mic" title="Voice input">🎤</button>
           <button id="rag-toggle" type="button" class="btn-icon" title="Use library context (RAG)">📚</button>
+          <button id="zim-toggle" type="button" class="btn-icon" title="Search ZIM archives (Wikipedia, MedlinePlus…) when answering">🗃️</button>
           <textarea id="input" placeholder="Message your model…" rows="1"></textarea>
           <button id="send" type="submit" class="btn-send" disabled>Send</button>
         </form>
