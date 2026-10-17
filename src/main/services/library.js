@@ -141,17 +141,23 @@ class Library {
   // a real search shortlists them (see docLevelSearch/search below). Without
   // this exclusion, the very first startup after an import would eagerly
   // chunk the entire imported corpus here, defeating that design.
+  // Uploads from before chunking existed get chunked once. Finds them by id
+  // first (the idx_library_docs_uploads partial index makes that instant) and
+  // only then reads their text — joining the full-text table up front read
+  // the whole multi-GB library every launch: ~30 s on a cold disk.
   backfillChunks() {
     const db = getDb();
-    const docs = db
+    const ids = db
       .prepare(`
-        SELECT d.id, f.body
-        FROM library_docs d
-        JOIN library_docs_fts f ON f.doc_id = d.id
+        SELECT d.id FROM library_docs d
         WHERE d.external_id IS NULL
           AND NOT EXISTS (SELECT 1 FROM library_chunks c WHERE c.doc_id = d.id)
       `)
-      .all();
+      .all()
+      .map((r) => r.id);
+    if (!ids.length) return 0;
+    const bodyOf = db.prepare('SELECT body FROM library_docs_fts WHERE doc_id = ?');
+    const docs = ids.map((id) => ({ id, body: bodyOf.get(id)?.body }));
     let migrated = 0;
     for (const doc of docs) {
       if (!doc.body) continue;
