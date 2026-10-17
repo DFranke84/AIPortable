@@ -1,4 +1,4 @@
-const state = { chatId: null, model: null, streaming: false, aborting: false, ragEnabled: false, pendingAttachments: [], contextSize: null, keepModelsLoadedOnExit: false, backend: 'ollama', lmstudioAutoLoad: true };
+const state = { chatId: null, model: null, streaming: false, aborting: false, ragEnabled: false, zimBooks: [], zimMode: 'quick', pendingAttachments: [], contextSize: null, keepModelsLoadedOnExit: false, backend: 'ollama', lmstudioAutoLoad: true };
 
 // Library search always embeds with this model, regardless of whatever chat
 // model is currently selected — the whole imported reference corpus's
@@ -26,6 +26,12 @@ const els = {
   exportChat: document.getElementById('export-chat'),
   micBtn: document.getElementById('mic-btn'),
   ragToggle: document.getElementById('rag-toggle'),
+  zimToggle: document.getElementById('zim-toggle'),
+  zimPicker: document.getElementById('zim-picker'),
+  zimPickerList: document.getElementById('zim-picker-list'),
+  zimPickerNote: document.getElementById('zim-picker-note'),
+  zimPickerNone: document.getElementById('zim-picker-none'),
+  zimPickerDone: document.getElementById('zim-picker-done'),
   themeToggle: document.getElementById('theme-toggle'),
   attachBtn: document.getElementById('attach-btn'),
   attachFile: document.getElementById('attach-file'),
@@ -499,6 +505,7 @@ async function refreshChatList() {
 
 async function openChat(chatId) {
   state.chatId = chatId;
+  applyChatZimSettings(chatId);
   const history = await window.localAI.getHistory(chatId);
   els.messages.innerHTML = '';
   els.scrollTopBtn.classList.add('hidden');
@@ -650,13 +657,62 @@ els.composer.addEventListener('submit', async (e) => {
   // safety net for a zero-token completion or error.
   assistantBody.classList.add('pending');
   const hasDocAttachment = attachments.some((a) => a.kind === 'text');
-  const pendingLabel = images.length ? 'Processing image' : hasDocAttachment ? 'Processing document' : 'Waiting for model';
+  let pendingLabel = images.length ? 'Processing image' : hasDocAttachment ? 'Processing document' : 'Waiting for model';
   assistantBody.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span><span class="pending-timer">${pendingLabel}…</span>`;
   const pendingTimerEl = assistantBody.querySelector('.pending-timer');
   const pendingStart = Date.now();
   const pendingInterval = setInterval(() => {
     pendingTimerEl.textContent = `${pendingLabel}… ${Math.floor((Date.now() - pendingStart) / 1000)}s`;
   }, 1000);
+  let full = '';
+  let firstToken = true;
+  state.streaming = true;
+  state.aborting = false;
+  setSendButtonMode('stop');
+
+  // ZIM archives: searched after the reply bubble exists so the search steps
+  // ("Searching: …", "Reading: …") can show live in it, and after the Stop
+  // button is live so a slow Thorough search can be cancelled.
+  const zimQuestion = text || identifiedAs;
+  if (state.zimBooks.length && zimQuestion) {
+    // Same num_ctx as the reply below (ZIM text always triggers the 16K
+    // bump), so the model isn't reloaded between research and answer.
+    const zimOptions = { num_ctx: Math.max(state.contextSize || 0, 16384) };
+    pendingLabel = 'Searching ZIM archives';
+    pendingTimerEl.textContent = `${pendingLabel}…`;
+    const stopSteps = window.localAI.onZimStep((step) => { pendingLabel = step; pendingTimerEl.textContent = `${step}…`; });
+    const prior = await window.localAI.getHistory(state.chatId);
+    const previous = [...prior].reverse().find((m) => m.role === 'user')?.content?.slice(0, 300) || null;
+    window.localAI.zimSaveSettings({ chatId: state.chatId, books: state.zimBooks, mode: state.zimMode });
+    let zim = { text: '', sources: [], steps: [] };
+    try {
+      zim = await window.localAI.zimContext({ model: state.model, question: zimQuestion, previous, books: state.zimBooks, mode: state.zimMode, options: zimOptions });
+    } catch (err) {
+      zim.steps = [`ZIM search failed: ${ipcErrorText(err)}`];
+    }
+    stopSteps();
+    pendingLabel = 'Waiting for model';
+    pendingTimerEl.textContent = `${pendingLabel}…`;
+    if (state.aborting) {
+      clearInterval(pendingInterval);
+      assistantBody.parentElement.remove();
+      state.streaming = false;
+      state.aborting = false;
+      setSendButtonMode('send');
+      return;
+    }
+    if (zim.text) {
+      contextResult = {
+        text: [contextResult.text, zim.text].filter(Boolean).join('\n\n---\n\n'),
+        sources: [...contextResult.sources, ...zim.sources],
+      };
+    }
+    const stepsTag = document.createElement('div');
+    stepsTag.className = 'sources-tag';
+    stepsTag.textContent = `🗃️ ${zim.fellBack ? 'Thorough needs a tool-calling model — used Quick. ' : ''}${zim.steps.join(' → ') || 'Searched'}${zim.sources.length ? '' : ' — nothing found'}`;
+    assistantBody.parentElement.insertBefore(stepsTag, assistantBody);
+  }
+
   if (contextResult.sources.length) {
     const tag = document.createElement('div');
     tag.className = 'sources-tag';
@@ -668,11 +724,6 @@ els.composer.addEventListener('submit', async (e) => {
     });
     assistantBody.parentElement.insertBefore(tag, assistantBody);
   }
-  let full = '';
-  let firstToken = true;
-  state.streaming = true;
-  state.aborting = false;
-  setSendButtonMode('stop');
   setModelLoadState('loading');
 
   const unsubscribe = window.localAI.onChatToken((data) => {
@@ -747,7 +798,7 @@ els.composer.addEventListener('submit', async (e) => {
     messages = [
       {
         role: 'system',
-        content: `Use the following context from the user's local library if it's relevant to their question. Mention which source(s) you drew from if you use them.\n\n${contextResult.text}`,
+        content: `Use the following context from the user's local library and offline reference archives if it's relevant to their question. Mention which source(s) you drew from if you use them.\n\n${contextResult.text}`,
       },
       ...messages,
     ];
@@ -840,6 +891,105 @@ els.ragToggle.addEventListener('click', () => {
   els.ragToggle.classList.toggle('active', state.ragEnabled);
   els.ragToggle.title = state.ragEnabled ? 'Library context: ON — click to disable' : 'Use library context (RAG)';
 });
+
+// ---- ZIM archive search in chat (main.js zim:* / services/zimSearch.js) ----
+// The 🗃️ button opens a checklist of every searchable .zim plus the
+// Quick/Thorough choice. The choice is saved per chat (on send) and as the
+// last-used default for new chats.
+let zimBookList = null; // [{ id, title, ftindex, articles }] once loaded
+let zimLastUsed = null; // { books, mode } — the default for chats without their own
+
+function updateZimToggle() {
+  const on = state.zimBooks.length > 0;
+  els.zimToggle.classList.toggle('active', on);
+  const names = (zimBookList || []).filter((b) => state.zimBooks.includes(b.id)).map((b) => b.title);
+  els.zimToggle.title = on
+    ? `Searching ${state.zimMode === 'thorough' ? '(Thorough)' : '(Quick)'}: ${names.join(', ') || state.zimBooks.join(', ')} — click to change`
+    : 'Search ZIM archives (Wikipedia, MedlinePlus…) when answering';
+}
+
+async function loadZimBooks() {
+  if (zimBookList) return zimBookList;
+  els.zimPickerList.textContent = 'Starting the archive search…';
+  const { books, last } = await window.localAI.zimListSearchable();
+  zimBookList = books;
+  zimLastUsed = last;
+  // Ticks for archives that no longer exist (deleted, drive not plugged in) are dropped.
+  state.zimBooks = state.zimBooks.filter((id) => books.some((b) => b.id === id));
+  return books;
+}
+
+function renderZimPicker() {
+  els.zimPickerList.innerHTML = '';
+  if (!zimBookList.length) {
+    els.zimPickerList.textContent = 'No .zim files found — download some in Tools → Wikipedia, or add them to Research\\_sources\\zim.';
+    return;
+  }
+  for (const b of zimBookList) {
+    const label = document.createElement('label');
+    label.title = b.ftindex ? b.id : `${b.id} — no full-text index, so only article titles are searched`;
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = state.zimBooks.includes(b.id);
+    box.onchange = () => {
+      state.zimBooks = box.checked ? [...state.zimBooks, b.id] : state.zimBooks.filter((id) => id !== b.id);
+      updateZimToggle();
+    };
+    const name = document.createElement('span');
+    name.className = 'zim-name';
+    name.textContent = b.title;
+    const meta = document.createElement('span');
+    meta.className = 'zim-meta';
+    const count = b.articles >= 1e6 ? `${(b.articles / 1e6).toFixed(1)}M` : b.articles >= 1e3 ? `${Math.round(b.articles / 1e3)}K` : String(b.articles);
+    meta.textContent = b.ftindex ? count : `${count} · titles only`;
+    label.append(box, name, meta);
+    els.zimPickerList.appendChild(label);
+  }
+  els.zimPicker.querySelector(`input[name="zim-mode"][value="${state.zimMode}"]`).checked = true;
+  els.zimPickerNote.textContent = 'Pick only the archives that fit the topic — fewer gives faster, more on-topic answers.';
+}
+
+function saveZimSettings() {
+  zimLastUsed = { books: state.zimBooks, mode: state.zimMode };
+  window.localAI.zimSaveSettings({ chatId: state.chatId, books: state.zimBooks, mode: state.zimMode });
+}
+
+els.zimToggle.addEventListener('click', async () => {
+  if (!els.zimPicker.classList.contains('hidden')) {
+    els.zimPicker.classList.add('hidden');
+    saveZimSettings();
+    return;
+  }
+  els.zimPicker.classList.remove('hidden');
+  await loadZimBooks();
+  renderZimPicker();
+});
+els.zimPicker.querySelectorAll('input[name="zim-mode"]').forEach((r) => {
+  r.addEventListener('change', () => { if (r.checked) { state.zimMode = r.value; updateZimToggle(); } });
+});
+els.zimPickerNone.onclick = () => {
+  state.zimBooks = [];
+  renderZimPicker();
+  updateZimToggle();
+};
+els.zimPickerDone.onclick = () => {
+  els.zimPicker.classList.add('hidden');
+  saveZimSettings();
+};
+
+// A chat's own saved choice, or the last-used one for a chat that has none
+// yet. Read from the chat list (SELECT * includes zim_settings).
+async function applyChatZimSettings(chatId) {
+  const chats = await window.localAI.listChats();
+  let saved = null;
+  try { saved = JSON.parse(chats.find((c) => c.id === chatId)?.zim_settings || 'null'); } catch { /* ignore */ }
+  const pick = saved || zimLastUsed;
+  if (!pick) return;
+  state.zimBooks = [...(pick.books || [])];
+  state.zimMode = pick.mode === 'thorough' ? 'thorough' : 'quick';
+  if (!els.zimPicker.classList.contains('hidden') && zimBookList) renderZimPicker();
+  updateZimToggle();
+}
 
 els.modelSelect.addEventListener('change', () => {
   state.model = els.modelSelect.value;
@@ -973,6 +1123,15 @@ async function refreshWikipediaSourceSelect(activeZimPath) {
     opt.textContent = f.name;
     els.wikipediaSource.appendChild(opt);
   }
+  // An archive opened from a chat source can live outside the download
+  // folder (e.g. Research\_sources\zim) — still show it as the current one.
+  if (activeName && !files.some((f) => f.name === activeName)) {
+    const opt = document.createElement('option');
+    opt.value = activeName;
+    opt.textContent = activeName;
+    opt.disabled = true;
+    els.wikipediaSource.appendChild(opt);
+  }
   els.wikipediaSource.value = activeName && [...els.wikipediaSource.options].some((o) => o.value === activeName) ? activeName : '';
 }
 
@@ -999,6 +1158,7 @@ els.wikipediaSource.addEventListener('change', async () => {
 // conditions clear again.
 let wikipediaViewerReady = false; // true once there's an active, ready archive to show
 let wikipediaViewerUrl = null; // cached from the last wikipediaStatus() fetch in refreshWikipediaViewer()
+let pendingWikipediaArticleUrl = null; // a chat ZIM source to show instead of the archive's main page, once
 
 function wikipediaViewShouldBeVisible() {
   return isMainViewActive('wikipedia') && els.toolsOverlay.classList.contains('hidden');
@@ -1059,7 +1219,8 @@ async function refreshWikipediaViewer() {
   if (status.ready) {
     els.wikipediaStatus.textContent = status.zimPath;
     els.wikipediaWebviewWrap.classList.remove('hidden');
-    wikipediaViewerUrl = status.viewerUrl;
+    wikipediaViewerUrl = pendingWikipediaArticleUrl || status.viewerUrl;
+    pendingWikipediaArticleUrl = null;
     wikipediaViewerReady = true;
   } else {
     els.wikipediaStatus.textContent = `Starting… (${status.zimPath})`;
@@ -1629,9 +1790,24 @@ window.localAI.onPullComplete(() => { refreshCatalog(); refreshModels(); });
 
 // One cited document under a reply (or in a search result): a Local/Research
 // badge plus the title, clickable to open it in the Reference Library.
-function sourceLink({ id, title, kind }) {
+function sourceLink({ id, title, kind, bookTitle, file, url }) {
   const a = document.createElement('span');
   a.className = 'src-link';
+  if (kind === 'zim') {
+    // A ZIM article: opens in the Wikipedia viewer, switching it to that archive.
+    a.title = `From the ${bookTitle} archive — click to read it in the Wikipedia viewer`;
+    const badge = document.createElement('span');
+    badge.className = 'src-badge zim';
+    badge.textContent = bookTitle || 'ZIM';
+    a.append(badge, title);
+    a.onclick = async () => {
+      const res = await window.localAI.wikipediaOpenArticle({ file, url });
+      if (!res?.success) { await showAppAlert(`Couldn't open "${title}" — its .zim file may have moved.`); return; }
+      pendingWikipediaArticleUrl = res.viewerUrl;
+      showMainView('wikipedia');
+    };
+    return a;
+  }
   a.title = kind === 'research' ? 'Linked from your Research library — click to read it' : 'One of your own uploads — click to read it';
   const badge = document.createElement('span');
   badge.className = `src-badge ${kind === 'research' ? 'research' : 'local'}`;
@@ -3442,5 +3618,11 @@ els.composer.addEventListener('drop', async (e) => {
   setStatus(ready, backend);
   await refreshChatList();
   state.contextSize = await window.localAI.getContextSize(); // so a chat sent before the Models tab is ever opened still honors it
+  // Last-used ZIM choice for the first (new) chat — without starting the
+  // search server; that happens on the first search or picker open.
+  zimLastUsed = await window.localAI.zimGetLast();
+  state.zimBooks = [...zimLastUsed.books];
+  state.zimMode = zimLastUsed.mode;
+  updateZimToggle();
   checkResearchNotice();
 })();
