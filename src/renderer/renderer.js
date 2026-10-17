@@ -308,6 +308,45 @@ els.themeToggle.onclick = () => {
 };
 
 // ============================================================ chat core
+// Model replies shown as formatted text (bold, lists, headings, code) rather
+// than raw **markdown**. A separate Marked instance, so the Reference
+// Library's own rendering is untouched. Model output is untrusted: raw HTML
+// is shown as text, links don't navigate (clicking one would take the whole
+// app window off to that page), and images aren't fetched.
+function escapeReplyHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+const replyMarked = window.marked?.Marked
+  ? new window.marked.Marked({
+    gfm: true,
+    breaks: true, // a single newline stays a line break, as in the plain-text display
+    renderer: {
+      // <br> is the one tag models routinely use (line breaks inside table cells) — harmless, so kept.
+      html: (html) => (/^\s*<br\s*\/?>\s*$/i.test(html) ? '<br>' : escapeReplyHtml(html)),
+      link: (href, title, text) => `<span class="md-link" title="${escapeReplyHtml(href)}">${text}</span>`,
+      image: (href, title, text) => (text ? escapeReplyHtml(`[image: ${text}]`) : ''),
+    },
+  })
+  : null;
+
+function renderReply(el, text) {
+  if (!replyMarked) { el.textContent = text; return; }
+  el.classList.add('md');
+  el.innerHTML = replyMarked.parse(text || '');
+}
+
+// Streaming re-renders the whole reply on each token — batched to one render
+// per animation frame so a fast model doesn't re-parse hundreds of times a second.
+function replyRenderer(el, onRendered) {
+  let pending = null;
+  return (text) => {
+    if (pending === null) {
+      requestAnimationFrame(() => { renderReply(el, pending); pending = null; onRendered?.(); });
+    }
+    pending = text;
+  };
+}
+
 function addMessageEl(role, content, attachments) {
   const div = document.createElement('div');
   div.className = `msg ${role}`;
@@ -323,8 +362,9 @@ function addMessageEl(role, content, attachments) {
     for (const a of attachments) row.appendChild(renderAttachmentChip(a, { large: true }));
     div.appendChild(row);
   }
-  const body = document.createElement('span');
-  body.textContent = content;
+  const body = document.createElement('div');
+  if (role === 'assistant') renderReply(body, content);
+  else body.textContent = content;
   div.appendChild(body);
   els.messages.appendChild(div);
   els.messages.scrollTop = els.messages.scrollHeight;
@@ -746,6 +786,7 @@ els.composer.addEventListener('submit', async (e) => {
     setModelLoadState('loading');
   }
 
+  const showReply = replyRenderer(assistantBody, () => { els.messages.scrollTop = els.messages.scrollHeight; });
   const unsubscribe = window.localAI.onChatToken((data) => {
     if (data.streamId !== streamId) return;
     const token = data.message?.content;
@@ -758,8 +799,7 @@ els.composer.addEventListener('submit', async (e) => {
         setModelLoadState('loaded'); // it streamed a token, so it must be resident now
       }
       full += token;
-      assistantBody.textContent = full;
-      els.messages.scrollTop = els.messages.scrollHeight;
+      showReply(full);
     }
   });
 
@@ -930,10 +970,17 @@ function updateZimToggle() {
   els.zimPicker.classList.toggle('hidden', !zimPickerOpen);
   els.zimSummary.classList.toggle('hidden', zimPickerOpen || !on);
   if (on) {
-    const names = state.zimBooks.map((id) => zimTitles[id] || id);
+    const names = state.zimBooks.map((id) => zimTitles[id] || readableZimId(id));
     els.zimSummaryText.textContent = `🗃️ Searching (${state.zimMode === 'thorough' ? 'Thorough' : 'Quick'}): ${names.join(', ')}`;
   }
   refreshModelLoadState(); // ticking archives changes the context size the model needs
+}
+
+// "wikipedia_en_all_maxi_2026-08" -> "Wikipedia" — for chats saved before
+// archive titles were stored with them, until the real list is loaded.
+function readableZimId(id) {
+  const s = id.replace(/_\d{4}-\d{2}[a-z]?$/, '').replace(/_(en|all|maxi|nopic|mini)(?=_|$)/g, '').replace(/_/g, ' ').trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 async function loadZimBooks() {
@@ -2483,13 +2530,14 @@ async function runAnalysis() {
     const streamId = `analyze_${Date.now()}`;
     let full = '';
     let firstToken = true;
+    const showAnalysis = replyRenderer(els.analyzeAnswer);
     unsubscribe = window.localAI.onChatToken((data) => {
       if (data.streamId !== streamId) return;
       const token = data.message?.content;
       if (token) {
         if (firstToken) { firstToken = false; analyzeState.stageStart = null; els.analyzeAnswer.textContent = ''; }
         full += token;
-        els.analyzeAnswer.textContent = full;
+        showAnalysis(full);
       }
     });
     // Same context-size floor chat uses whenever an image or library context
