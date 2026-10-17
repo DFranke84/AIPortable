@@ -1515,6 +1515,15 @@ ipcMain.handle('zim:list-searchable', async () => {
   };
 });
 
+// "Load model" button (and the step before a ZIM search): loads the chat
+// model ahead of the first question. `zim` also starts the search server
+// alongside, so both waits overlap instead of adding up.
+ipcMain.handle('chat:load-model', async (e, { model, options, zim }) => {
+  const [loaded] = await Promise.allSettled([chatBackend().loadModel(model, options), zim ? ensureZimSearch() : null]);
+  if (loaded.status === 'rejected') return { success: false, error: loaded.reason?.message || String(loaded.reason) };
+  return { success: true };
+});
+
 // The last-used choice alone, without starting the search server.
 ipcMain.handle('zim:get-last', () => ({ books: hostSettings.zimSearchBooks || [], mode: hostSettings.zimSearchMode === 'thorough' ? 'thorough' : 'quick' }));
 

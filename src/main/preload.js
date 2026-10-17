@@ -134,6 +134,7 @@ contextBridge.exposeInMainWorld('localAI', {
   wikipediaOpenArticle: (payload) => ipcRenderer.invoke('wikipedia:open-article', payload),
   // -- ZIM search in chat (services/zimSearch.js) --
   zimListSearchable: () => ipcRenderer.invoke('zim:list-searchable'),
+  loadChatModel: (payload) => ipcRenderer.invoke('chat:load-model', payload),
   zimGetLast: () => ipcRenderer.invoke('zim:get-last'),
   zimSaveSettings: (payload) => ipcRenderer.invoke('zim:save-settings', payload),
   zimContext: (payload) => ipcRenderer.invoke('zim:context', payload),

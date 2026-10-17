@@ -234,6 +234,20 @@ class LMStudioManager {
     return entry;
   }
 
+  // The "Load model" button: an explicit request to load, so it loads even
+  // with Auto-load off or LM Studio's JIT loading on (where ensureLoaded
+  // would leave loading to the first chat).
+  async loadModel(model, options) {
+    const entry = (await this.listAll()).find((m) => m.key === model);
+    if (!entry) throw new Error(`"${model}" wasn't found in LM Studio — it may have been renamed or deleted.`);
+    if ((entry.loaded_instances || []).length > 0) return true;
+    await request('/api/v1/models/load', {
+      method: 'POST',
+      body: { model, ...(options?.num_ctx ? { context_length: options.num_ctx } : {}) },
+    });
+    return true;
+  }
+
   // Streams OpenAI SSE chunks, forwarding each content delta to `onToken` in
   // Ollama's event shape. `options.num_ctx` only matters when this call has
   // to load the model explicitly (see ensureLoaded) — LM Studio fixes context
