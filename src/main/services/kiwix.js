@@ -2,6 +2,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { killPid, pidsListeningOn } = require('./zimSearch');
 
 const HOST = '127.0.0.1';
 // Fixed local port, distinct from Ollama's 11434 and the mobile/voice servers
@@ -64,8 +65,8 @@ class KiwixManager {
     // it. That orphan keeps answering health checks with whatever it was
     // started with, so every subsequent "switch" looked like it succeeded
     // while silently continuing to serve the old file forever. One recovery
-    // attempt: clear anything else with that name and try once more before
-    // actually giving up.
+    // attempt: stop whatever holds the viewer's port and try once more
+    // before actually giving up.
     await this.killStrayProcesses();
     await new Promise((r) => setTimeout(r, 500));
     return this.spawnAndWait(bin, zimPath);
@@ -75,14 +76,17 @@ class KiwixManager {
     this.zimPath = zimPath;
     try {
       // --address keeps it off the local network — only this app's viewer needs it.
-      this.process = spawn(bin, [`--address=${HOST}`, `--port=${PORT}`, zimPath], {
+      const proc = spawn(bin, [`--address=${HOST}`, `--port=${PORT}`, zimPath], {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });
-      this.process.stdout.on('data', (c) => this.appendLog(c));
-      this.process.stderr.on('data', (c) => this.appendLog(c));
-      this.process.on('error', (err) => console.error('Failed to spawn kiwix-serve:', err.message));
-      this.process.on('exit', () => { this.process = null; });
+      proc.stdout.on('data', (c) => this.appendLog(c));
+      proc.stderr.on('data', (c) => this.appendLog(c));
+      proc.on('error', (err) => console.error('Failed to spawn kiwix-serve:', err.message));
+      // Only forget the process this exit belongs to — an old one exiting
+      // late must not wipe out the reference to its replacement.
+      proc.on('exit', () => { if (this.process === proc) this.process = null; });
+      this.process = proc;
     } catch (err) {
       console.error('Could not start kiwix-serve:', err.message);
       return Promise.resolve(false);
@@ -104,19 +108,10 @@ class KiwixManager {
     })();
   }
 
-  killStrayProcesses() {
-    return new Promise((resolve) => {
-      const [cmd, args] = process.platform === 'win32'
-        ? ['taskkill', ['/F', '/IM', 'kiwix-serve.exe']]
-        : ['pkill', ['-f', 'kiwix-serve']];
-      try {
-        const child = spawn(cmd, args, { stdio: 'ignore' });
-        child.on('exit', resolve);
-        child.on('error', resolve);
-      } catch {
-        resolve();
-      }
-    });
+  // Only whatever holds the viewer's port — not every kiwix-serve.exe by
+  // name, which would also take down the chat's ZIM search server (8099).
+  async killStrayProcesses() {
+    for (const pid of await pidsListeningOn(PORT)) killPid(pid);
   }
 
   // Returns once the process has actually exited (or after a timeout, in
@@ -131,17 +126,17 @@ class KiwixManager {
   // whole 6s poll in ensureRunning() timed out.
   stop() {
     return new Promise((resolve) => {
-      if (!this.process || this.process.killed) {
-        this.process = null;
-        this.zimPath = null;
-        resolve();
-        return;
-      }
       const proc = this.process;
-      const done = () => { this.process = null; this.zimPath = null; resolve(); };
+      // Cleared now, not when it exits: by then a replacement may already be
+      // in this.process (the cause of an orphaned kiwix-serve after a switch).
+      this.process = null;
+      this.zimPath = null;
+      if (!proc || proc.exitCode !== null) { resolve(); return; }
+      let finished = false;
+      const done = () => { if (!finished) { finished = true; resolve(); } };
       proc.once('exit', done);
       proc.kill();
-      setTimeout(done, 2000);
+      setTimeout(() => { killPid(proc.pid); setTimeout(done, 500); }, 2000); // didn't exit: force it
     });
   }
 

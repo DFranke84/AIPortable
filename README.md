@@ -227,8 +227,9 @@ the model just answers normally.
 
 Click the 🗃️ button in the composer to pick which `.zim` archives (Wikipedia,
 MedlinePlus, StackExchange sites, …) the AI searches before answering. Archives
-are listed from the Wikipedia download folder, the Research library's
-`_sources\zim` folder, and the folder of the viewer's current file. Nothing is
+are listed from the folders in **Tools → Library → ZIM archive folders**: the
+Wikipedia download folder and the Research library's `_sources\zim` (both
+automatic, each can be switched off) plus any folders you add. Nothing is
 copied or embedded: `services/zimSearch.js` runs a second `kiwix-serve`
 (127.0.0.1:8099, every archive at once) and uses each archive's own full-text
 index. Archives without one are searched by article title only.
