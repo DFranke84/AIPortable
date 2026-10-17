@@ -1552,6 +1552,38 @@ ipcMain.handle('wikipedia:set-active', async (e, name) => {
   return { success: true, zimPath: filePath, ready };
 });
 
+// Everything the viewer can open: every .zim in the ZIM archive folders
+// (Tools → Library) that exist — the Wikipedia download folder, the Research
+// library's _sources\zim, added folders — switched on for chat search or not.
+// Grouped by folder for the viewer's dropdown; a file name seen in an earlier
+// folder isn't repeated.
+ipcMain.handle('wikipedia:list-all', () => {
+  const seen = new Set();
+  return zimFolderList()
+    .filter((f) => f.exists)
+    .map((f) => ({
+      label: f.label || f.path,
+      folder: f.path,
+      files: ZimSearch.scanFolders([f.path])
+        .filter((p) => !seen.has(path.basename(p).toLowerCase()) && seen.add(path.basename(p).toLowerCase()))
+        .map((p) => ({ name: path.basename(p), path: p })),
+    }))
+    .filter((g) => g.files.length);
+});
+
+// Opens a .zim from any of those folders in the viewer (set-active above
+// only knows the download folder). Anything outside them is refused.
+ipcMain.handle('wikipedia:open-file', async (e, filePath) => {
+  const resolved = path.resolve(String(filePath || ''));
+  const dir = path.dirname(resolved).toLowerCase();
+  const inAFolder = zimFolderList().some((f) => f.exists && path.resolve(f.path).toLowerCase() === dir);
+  if (!inAFolder || !/\.zim$/i.test(resolved) || !fs.existsSync(resolved)) return { success: false, error: 'File not found.' };
+  hostSettings.zimPath = resolved;
+  saveHostSettings();
+  const ready = await kiwix.ensureRunning(resolved, getResourcesDir());
+  return { success: true, zimPath: resolved, ready };
+});
+
 ipcMain.handle('wikipedia:remove', async (e, name) => {
   const filePath = path.join(getEffectiveWikipediaDir(), path.basename(name));
   const wasActive = hostSettings.zimPath === filePath;
