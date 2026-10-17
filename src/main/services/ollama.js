@@ -270,6 +270,15 @@ class OllamaManager {
   // waiting out its idle timer — used on graceful shutdown so quitting the
   // app actually frees RAM/VRAM right away rather than leaving it to Ollama's
   // own clock (which won't even fire once we kill the process anyway).
+  // Loads a model into memory without generating anything (an empty
+  // /api/generate request) — the "Load model" button. `options.num_ctx` must
+  // match the chat that follows, or Ollama reloads it then anyway.
+  async loadModel(name, options) {
+    const res = await request('/api/generate', { method: 'POST', body: { model: name, keep_alive: -1, ...(options ? { options } : {}) } });
+    if (res?.error) throw new Error(res.error);
+    return true;
+  }
+
   async unloadModel(name) {
     try {
       await request('/api/generate', { method: 'POST', body: { model: name, keep_alive: 0 } });

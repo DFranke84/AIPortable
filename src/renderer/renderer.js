@@ -18,6 +18,7 @@ const els = {
   statusText: document.getElementById('status-text'),
   modelLoadDot: document.getElementById('model-load-dot'),
   modelLoadText: document.getElementById('model-load-text'),
+  modelLoadBtn: document.getElementById('model-load-btn'),
   composer: document.getElementById('composer'),
   input: document.getElementById('input'),
   send: document.getElementById('send'),
@@ -660,7 +661,7 @@ els.composer.addEventListener('submit', async (e) => {
   let pendingLabel = images.length ? 'Processing image' : hasDocAttachment ? 'Processing document' : 'Waiting for model';
   assistantBody.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span><span class="pending-timer">${pendingLabel}…</span>`;
   const pendingTimerEl = assistantBody.querySelector('.pending-timer');
-  const pendingStart = Date.now();
+  let pendingStart = Date.now();
   const pendingInterval = setInterval(() => {
     pendingTimerEl.textContent = `${pendingLabel}… ${Math.floor((Date.now() - pendingStart) / 1000)}s`;
   }, 1000);
@@ -677,10 +678,16 @@ els.composer.addEventListener('submit', async (e) => {
   if (state.zimBooks.length && zimQuestion) {
     // Same num_ctx as the reply below (ZIM text always triggers the 16K
     // bump), so the model isn't reloaded between research and answer.
-    const zimOptions = { num_ctx: Math.max(state.contextSize || 0, 16384) };
-    pendingLabel = 'Searching ZIM archives';
-    pendingTimerEl.textContent = `${pendingLabel}…`;
-    const stopSteps = window.localAI.onZimStep((step) => { pendingLabel = step; pendingTimerEl.textContent = `${step}…`; });
+    const zimOptions = { num_ctx: chatNumCtx() };
+    const phase = (label) => { pendingLabel = label; pendingStart = Date.now(); pendingTimerEl.textContent = `${label}…`; };
+    // Load the model as its own visible step — otherwise its load time hides
+    // inside "Searching" (the keyword step is the model's first use). A
+    // no-op when it's already loaded with this context size.
+    phase('Loading model');
+    setModelLoadState('loading');
+    await window.localAI.loadChatModel({ model: state.model, options: zimOptions, zim: true });
+    phase('Searching ZIM archives');
+    const stopSteps = window.localAI.onZimStep((step) => phase(step));
     const prior = await window.localAI.getHistory(state.chatId);
     const previous = [...prior].reverse().find((m) => m.role === 'user')?.content?.slice(0, 300) || null;
     window.localAI.zimSaveSettings({ chatId: state.chatId, books: state.zimBooks, mode: state.zimMode });
@@ -691,8 +698,7 @@ els.composer.addEventListener('submit', async (e) => {
       zim.steps = [`ZIM search failed: ${ipcErrorText(err)}`];
     }
     stopSteps();
-    pendingLabel = 'Waiting for model';
-    pendingTimerEl.textContent = `${pendingLabel}…`;
+    phase('Waiting for model');
     if (state.aborting) {
       clearInterval(pendingInterval);
       assistantBody.parentElement.remove();
@@ -772,7 +778,7 @@ els.composer.addEventListener('submit', async (e) => {
   // floor — attachments can still raise it further above that floor, never
   // below it, so a deliberately small setting on a tiny GPU doesn't quietly
   // get ignored, but also doesn't starve a request that genuinely needs more.
-  const needsContextBump = images.length || docAttachments.length || Boolean(contextResult.text);
+  const needsContextBump = images.length || docAttachments.length || Boolean(contextResult.text) || state.ragEnabled || state.zimBooks.length > 0;
   const effectiveCtx = needsContextBump ? Math.max(state.contextSize || 0, 16384) : state.contextSize;
   const options = effectiveCtx ? { num_ctx: effectiveCtx } : undefined;
 
@@ -1041,6 +1047,7 @@ function setModelLoadState(mode) {
     : mode === 'loaded' ? 'Model loaded in memory'
     : 'Not loaded in memory yet — first message will take longer';
 
+  els.modelLoadBtn.classList.toggle('hidden', mode !== 'idle' || !state.model);
   if (mode === modelLoadUiMode) return;
   modelLoadUiMode = mode;
   clearInterval(modelLoadTimerInterval);
@@ -1065,7 +1072,7 @@ function setModelLoadState(mode) {
 }
 
 async function refreshModelLoadState() {
-  if (!state.model || state.streaming) return; // don't fight the 'loading' state set during a send
+  if (!state.model || state.streaming || modelLoadingByButton) return; // don't fight a 'loading' state already in progress
   try {
     const running = await window.localAI.getRunningModels();
     setModelLoadState(running.some((m) => m.name === state.model) ? 'loaded' : 'idle');
@@ -1074,6 +1081,33 @@ async function refreshModelLoadState() {
   }
 }
 setInterval(refreshModelLoadState, 5000);
+
+// The context size a chat request will use — with library or ZIM lookups
+// on it's always the 16K bump (see needsContextBump in the send handler),
+// so loading ahead with the same size means no reload on the first question.
+function chatNumCtx() {
+  const bump = state.ragEnabled || state.zimBooks.length > 0;
+  return bump ? Math.max(state.contextSize || 0, 16384) : state.contextSize;
+}
+
+// "Load model": loads the selected model before the first question (and
+// starts the ZIM search server if archives are ticked). Optional — sending
+// a message still loads it the same as always.
+let modelLoadingByButton = false;
+els.modelLoadBtn.onclick = async () => {
+  if (!state.model || modelLoadingByButton) return;
+  modelLoadingByButton = true;
+  setModelLoadState('loading');
+  const numCtx = chatNumCtx();
+  const res = await window.localAI.loadChatModel({ model: state.model, options: numCtx ? { num_ctx: numCtx } : undefined, zim: state.zimBooks.length > 0 });
+  modelLoadingByButton = false;
+  if (!res.success) {
+    setModelLoadState('idle');
+    await showAppAlert(`Couldn't load the model: ${res.error}`);
+    return;
+  }
+  refreshModelLoadState();
+};
 
 // ============================================================ tools panel
 function showTab(name) {
