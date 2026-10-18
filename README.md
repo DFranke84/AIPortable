@@ -7,6 +7,15 @@ read Wikipedia without the internet.
 No account, no cloud, no telemetry. The whole app, including its models, chats and data, lives in **one folder**
 that you can move to another drive or carry on a USB stick.
 
+## What it looks like
+
+<table>
+<tr><td width="50%"><img src="docs/images/aiportable-chat.png" alt="An answer from your own library (📚) - the pages it used are listed above it"><br><sub>An answer from your own library (📚) - the pages it used are listed above it</sub></td><td width="50%"><img src="docs/images/aiportable-map.jpg" alt="Offline map of your area (the 'My area' region)"><br><sub>Offline map of your area (the 'My area' region)</sub></td></tr>
+<tr><td width="50%"><img src="docs/images/aiportable-tools-library.png" alt="Tools/Settings → Library: the linked Research library and archive folders"><br><sub>Tools/Settings → Library: the linked Research library and archive folders</sub></td></tr>
+</table>
+
+*Pictures from a demo library built from scratch with these tools (starter-pack samples, a few recipes, a Local Area for Asheville, NC).*
+
 ---
 
 ## How the apps fit together
@@ -57,6 +66,9 @@ app and its tools, plus the AI models you choose (2 - 20 GB each) and any maps (
 3. **Double-click `AIPortable.vbs`** to start the app.
 
 Step by step, all options and troubleshooting: **[SETUP.md](SETUP.md)**.
+
+
+**Testing a fresh install?** [TESTING.md](TESTING.md) is a step-by-step checklist for setting all the apps up from scratch in a test folder - no experience needed.
 
 ---
 
