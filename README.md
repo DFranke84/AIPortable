@@ -161,3 +161,9 @@ Copy the whole folder to move or back up the app. To start fresh, delete `data\c
 ---
 
 **Detailed setup, options, troubleshooting and technical notes:** [SETUP.md](SETUP.md).
+
+## License
+
+Free to use, change and share under the [MIT License](LICENSE). Bundled third-party parts (PDF.js, MapLibre,
+PMTiles, marked, Noto fonts, and the Ollama / Kiwix / whisper programs that setup downloads) keep their own
+open-source licenses.
