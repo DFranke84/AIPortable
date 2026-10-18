@@ -4,6 +4,8 @@ An AI assistant that runs entirely on your own computer: chat with local AI mode
 documents, search offline Wikipedia and other reference archives while it answers, browse offline maps, and
 read Wikipedia without the internet.
 
+▶ **[Watch the feature tour on YouTube](https://youtu.be/AcBpQHDESII)** - it shows AIPortable-JustAI, the slim version of this app; chat, library and archive search work the same here, and this version adds maps and Wikipedia.
+
 No account, no cloud, no telemetry. The whole app, including its models, chats and data, lives in **one folder**
 that you can move to another drive or carry on a USB stick.
 
