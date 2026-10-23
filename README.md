@@ -6,6 +6,8 @@ read Wikipedia without the internet.
 
 ▶ **[Watch the feature tour on YouTube](https://youtu.be/AcBpQHDESII)** - it shows AIPortable-JustAI, the slim version of this app; chat, library and archive search work the same here, and this version adds maps and Wikipedia.
 
+**Install or update the whole suite:** [AI Research Suite](https://github.com/DFranke84/AI-Research-Suite) is the one place to install and update this app and its companions. Its **Check for updates** keeps every piece current without touching your chats, models or library. A one-click Windows installer (Suite-Setup.exe) that asks which pieces you want, shows the space and download time, and sets everything up is coming there next - until then, use the setup steps below.
+
 No account, no cloud, no telemetry. The whole app, including its models, chats and data, lives in **one folder**
 that you can move to another drive or carry on a USB stick.
 
