@@ -25,3 +25,6 @@ t.html
 *.log
 Thumbs.db
 desktop.ini
+
+# Written by the suite updater (what version is installed)
+release-manifest.json
