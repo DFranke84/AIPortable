@@ -98,15 +98,21 @@ foreach ($key in $Regions) {
   if (Test-Path $dest) { Write-Host "    [skip] $($r.Name) - already in data\maps"; continue }
   $part = "$dest.part"
   $done = $false
+  # pmtiles cuts the region out of the live world map and can't resume, so a dropped connection
+  # means starting that region again: try each map build up to 3 times, with a pause in between.
   foreach ($d in $dates) {
-    Remove-Item $part -Force -ErrorAction SilentlyContinue
-    Write-Host ""
-    Write-Host "    Downloading $($r.Name) ($($r.Size), map build $d)..." -ForegroundColor Cyan
-    $argList = @('extract', $source.Replace('{date}', $d), $part)
-    if ($r.Bbox) { $argList += "--bbox=$($r.Bbox)" }
-    if ($null -ne $r.MaxZoom) { $argList += "--maxzoom=$($r.MaxZoom)" }
-    & $exePath @argList
-    if ($LASTEXITCODE -eq 0 -and (Test-Path $part)) { Move-Item $part $dest -Force; $done = $true; break }
+    for ($try = 1; $try -le 3 -and -not $done; $try++) {
+      Remove-Item $part -Force -ErrorAction SilentlyContinue
+      Write-Host ""
+      Write-Host "    Downloading $($r.Name) ($($r.Size), map build $d$(if ($try -gt 1) { ", try $try" }))..." -ForegroundColor Cyan
+      $argList = @('extract', $source.Replace('{date}', $d), $part)
+      if ($r.Bbox) { $argList += "--bbox=$($r.Bbox)" }
+      if ($null -ne $r.MaxZoom) { $argList += "--maxzoom=$($r.MaxZoom)" }
+      & $exePath @argList
+      if ($LASTEXITCODE -eq 0 -and (Test-Path $part)) { Move-Item $part $dest -Force; $done = $true; break }
+      if ($try -lt 3) { Write-Host "    That didn't finish - trying again in $(30 * $try) s." -ForegroundColor Yellow; Start-Sleep -Seconds (30 * $try) }
+    }
+    if ($done) { break }
     Write-Host "    That build didn't work - trying the day before." -ForegroundColor Yellow
   }
   Remove-Item $part -Force -ErrorAction SilentlyContinue
